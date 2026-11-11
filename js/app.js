@@ -22,6 +22,7 @@ let currentTimelineFilter = 'all'; // 'all' | 'todo' | 'booked'
 let currentTipCategory = 'Tümü';
 let currentShopCategory = 'Tümü';
 let currentBudgetFilter = 'Tümü';
+let currentBudgetEntryFilter = 'all'; // 'all' | 'actual' | 'estimate' | 'transfer'
 let currentHalalSubtab = 'markets'; // 'markets' | 'basket' | 'phrases' | 'radar'
 let currentShopSubtab = 'catalog';  // 'catalog' | 'taxfree'
 let currentGuideSubtab = 'tips';    // 'tips' | 'checklist' | 'tools'
@@ -122,6 +123,8 @@ function initApp() {
 }
 
 let storageAvailable = true;
+let lastStorageError = false;
+let pendingImportPayload = null;
 
 function getSafeStorage() {
   try {
@@ -163,21 +166,51 @@ function getFxRate() {
 }
 
 function saveMasterState() {
-  const store = getSafeStorage();
-  if (store) {
-    try { store.setItem(STORAGE_KEY_MASTER, JSON.stringify(appState)); } catch (e) {}
+  let ok = true;
+  let error = null;
+  const serialized = JSON.stringify(appState);
+  try {
+    if (typeof localStorage === 'undefined') {
+      storageAvailable = false;
+    } else {
+      localStorage.setItem(STORAGE_KEY_MASTER, serialized);
+      storageAvailable = true;
+      lastStorageError = false;
+    }
+  } catch (e) {
+    ok = false;
+    error = e;
+    lastStorageError = true;
   }
   updateStorageBadge();
-  if (appState.cloudSyncUrl && appState.cloudSyncUrl.startsWith('http')) {
+  if (ok && appState.cloudSyncUrl && appState.cloudSyncUrl.startsWith('http')) {
     pushToCloudSync();
   }
+  return { ok, error };
 }
 
 function updateStorageBadge() {
   const el = document.getElementById('storage-mode-label');
+  const dot = document.getElementById('header-sync-dot');
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+  if (dot) {
+    dot.classList.toggle('offline', isOffline);
+    dot.classList.toggle('error', !!lastStorageError);
+  }
   if (!el) return;
+  if (lastStorageError) {
+    el.textContent = 'Kayıt Hatası! Kodu Dışa Aktar';
+    return;
+  }
   if (!storageAvailable) {
-    el.textContent = 'Geçici Oturum (Iframe) • Kodu Dışa Aktar';
+    el.textContent = isOffline
+      ? 'Çevrimdışı • Geçici Oturum (Kodu Al)'
+      : 'Geçici Oturum (Iframe) • Kodu Dışa Aktar';
+    return;
+  }
+  if (isOffline) {
+    el.textContent = 'Çevrimdışı Hazır • Cihazda Kayıtlı';
     return;
   }
   el.textContent = (appState.cloudSyncUrl && appState.cloudSyncUrl.startsWith('http'))
@@ -213,32 +246,125 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-// Unified Google Maps / Apple Maps Builder
-function buildPlaceUrl(query) {
-  const q = encodeURIComponent(query || 'Tokyo');
-  return appState.mapProvider === 'apple'
-    ? `https://maps.apple.com/?q=${q}`
-    : `https://www.google.com/maps/search/?api=1&query=${q}`;
+// Canonical calendar labels derived in UTC from ISO dates (avoids TZ drift & Paz collision).
+function formatWeekdayLabel(isoDate, long = false) {
+  if (typeof isoDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return '—';
+  const date = new Date(isoDate + 'T12:00:00Z');
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== isoDate) return '—';
+  const short = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  const full = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+  return (long ? full : short)[date.getUTCDay()];
 }
 
-function buildDirUrl(origin, dest) {
-  const o = encodeURIComponent(origin || 'Tokyo Station');
-  const d = encodeURIComponent(dest || 'Tokyo');
-  return appState.mapProvider === 'apple'
-    ? `https://maps.apple.com/?saddr=${o}&daddr=${d}&dirflg=r`
-    : `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${d}&travelmode=transit`;
+function buildQueryString(params) {
+  if (typeof URLSearchParams !== 'undefined') return new URLSearchParams(params).toString();
+  return Object.keys(params).map(k =>
+    `${encodeURIComponent(k)}=${encodeURIComponent(params[k]).replace(/%20/g, '+')}`
+  ).join('&');
+}
+
+// URL builders accept RAW text; legacy '+' fields decode cleanly via mapFieldText.
+function mapQueryText(value, encoding = 'raw') {
+  const text = String(value ?? '');
+  if (encoding === 'raw') return text;
+  if (encoding !== 'legacy') throw new TypeError('Unknown Maps query encoding');
+  const formText = text.replace(/\+/g, ' ');
+  try { return decodeURIComponent(formText); } catch { return formText; }
+}
+
+function mapFieldText(record, field = 'mapsQuery', fallback = '') {
+  const value = record && record[field];
+  if (!value) return String(fallback || '');
+  const encoding = record[field + 'Encoding'] || (field === 'accommodation' ? 'raw' : 'legacy');
+  return mapQueryText(value, encoding);
+}
+
+// Unified Google Maps / Apple Maps Builder
+function buildPlaceUrl(query, encoding = 'raw') {
+  const q = mapQueryText(query || 'Tokyo', encoding);
+  const qs = buildQueryString(appState.mapProvider === 'apple' ? { q } : { api: '1', query: q });
+  return (appState.mapProvider === 'apple' ? 'https://maps.apple.com/?' : 'https://www.google.com/maps/search/?') + qs;
+}
+
+function buildDirUrl(origin, dest, options = {}) {
+  const o = mapQueryText(origin || '', options.originEncoding || 'raw').trim();
+  const d = mapQueryText(dest || 'Tokyo', options.destinationEncoding || 'raw');
+  const params = appState.mapProvider === 'apple'
+    ? (o ? { saddr: o, daddr: d, dirflg: 'r' } : { daddr: d, dirflg: 'r' })
+    : (o ? { api: '1', origin: o, destination: d, travelmode: 'transit' } : { api: '1', destination: d, travelmode: 'transit' });
+  return (appState.mapProvider === 'apple' ? 'https://maps.apple.com/?' : 'https://www.google.com/maps/dir/?') + buildQueryString(params);
+}
+
+function resolveMealForStop(day, stop, mealChoice) {
+  if (!day || !stop) return stop;
+  const name = String(stop.name || '');
+  if (/kumanya/i.test(name)) return stop;
+  const isLunch = /öğle/i.test(name);
+  const isDinner = /akşam\s+yemeği|veda\s+akşam/i.test(name);
+  if (!isLunch && !isDinner) return stop;
+
+  const mealType = isLunch ? 'lunch' : 'dinner';
+  const options = mealType === 'lunch' ? (day.lunchOptions || []) : (day.dinnerOptions || []);
+  if (!options.length) return stop;
+
+  const activeIdx = mealType === 'lunch' ? (mealChoice.lunchIdx || 0) : (mealChoice.dinnerIdx || 0);
+  const opt = options[activeIdx] || options[0];
+  if (!opt) return stop;
+
+  const isDedicatedMeal = /^(geç\s+)?(öğle|akşam)\s+yemeği\s*:|^.*veda akşam yemeği\s*:/i.test(name) ||
+    /^takadanobaba akşam yemeği/i.test(name);
+  const updated = Object.assign({}, stop, {
+    activeMealOpt: opt,
+    activeMealType: mealType,
+    activeMealIdx: activeIdx,
+    activeMealLabel: `${activeIdx === 0 ? 'Ana Seçenek' : '2. Yedek'}: ${opt.name}`
+  });
+
+  if (isDedicatedMeal || activeIdx > 0) {
+    updated.name = isDedicatedMeal
+      ? `${mealType === 'lunch' ? 'Öğle Yemeği' : 'Akşam Yemeği'}: ${opt.name}`
+      : `${stop.name} (${opt.name})`;
+    updated.mapsQuery = opt.mapsQuery || opt.name;
+    updated.mapsQueryEncoding = opt.mapsQueryEncoding || (opt.mapsQuery ? 'legacy' : 'raw');
+    if (opt.hours) updated.hoursInfo = opt.hours;
+  }
+  return updated;
+}
+
+function resolveDayStopsWithState(day) {
+  if (!day) return [];
+  const activePlanRec = appState.dayPlans ? appState.dayPlans[day.id] : null;
+  const activePlan = activePlanRec && activePlanRec.current ? activePlanRec.current : null;
+  const mealChoice = (appState.selectedMeals && appState.selectedMeals[day.id]) || { lunchIdx: 0, dinnerIdx: 0 };
+  const overlaid = (typeof koyoPlanner !== 'undefined')
+    ? koyoPlanner.overlay(day, activePlan, appState.completedStops)
+    : (day.stops || []).map((s, idx) => ({ ...s, origIndex: idx, sid: s.stopId || `${day.id}-s${idx}`, originalTime: s.time, plannerChanged: false }));
+  return overlaid.map(s => resolveMealForStop(day, s, mealChoice));
 }
 
 function buildFullDayMapUrl(day) {
-  if (!day || !day.stops || !day.stops.length) return buildPlaceUrl(day?.city || 'Tokyo');
-  const origin = day.accommodation ? day.accommodation.split('(')[0].trim() : day.stops[0].mapsQuery;
-  const stops = day.stops.map(s => s.mapsQuery).filter(Boolean);
-  const dest = stops[stops.length - 1] || origin;
-  if (appState.mapProvider === 'apple') {
-    return `https://maps.apple.com/?saddr=${encodeURIComponent(origin)}&daddr=${encodeURIComponent(dest)}&dirflg=r`;
-  }
-  const waypoints = stops.slice(0, -1).slice(0, 7).map(w => encodeURIComponent(w)).join('|');
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}${waypoints ? '&waypoints=' + waypoints : ''}&travelmode=transit`;
+  if (!day || !Array.isArray(day.stops) || !day.stops.length) return buildPlaceUrl(day?.city || 'Tokyo');
+  const light = !!appState.dayModes?.[day.id]?.lighten;
+  const resolved = resolveDayStopsWithState(day);
+  const stops = resolved
+    .filter(s => !(light && s.isOptionalDrop) && !s.plannerSkipped)
+    .map(s => mapFieldText(s, 'mapsQuery', s.name))
+    .filter(Boolean);
+  if (!stops.length) return buildPlaceUrl(day.city || 'Tokyo');
+  const home = mapFieldText(day, 'accommodation').split('(')[0].trim();
+  const origin = home || stops[0];
+  const dest = stops[stops.length - 1];
+  if (appState.mapProvider === 'apple') return buildDirUrl(origin, dest);
+  const via = (home ? stops.slice(0, -1) : stops.slice(1, -1)).slice(0, 7);
+  if (via[0] === origin) via.shift();
+  const params = {
+    api: '1',
+    origin,
+    destination: dest,
+    ...(via.length ? { waypoints: via.join('|') } : {}),
+    travelmode: 'transit'
+  };
+  return 'https://www.google.com/maps/dir/?' + buildQueryString(params);
 }
 
 function getJapanLiveStatus() {
@@ -300,10 +426,18 @@ function checkUrlSyncHash() {
     try {
       const encoded = window.location.hash.replace('#sync=', '');
       const decoded = JSON.parse(decodeURIComponent(escape(atob(encoded))));
-      appState = Object.assign(appState, decoded);
-      saveMasterState();
-      history.replaceState(null, '', window.location.pathname);
-      setTimeout(() => showToast('Eşinizin paylaştığı güncel veriler aktarıldı'), 300);
+      const snapshot = cloneAppStateSnapshot();
+      mergePartnerState(decoded);
+      const saveRes = saveMasterState();
+      if (!saveRes.ok) {
+        appState = snapshot;
+        setTimeout(() => showToast('Depolama alanı dolu; paylaşılan veri uygulanamadı'), 300);
+        return;
+      }
+      if (typeof history !== 'undefined' && history.replaceState) {
+        history.replaceState(null, '', window.location.pathname);
+      }
+      setTimeout(() => showToast('Eşinizin paylaştığı güncel veriler akıllıca birleştirildi'), 300);
     } catch (e) {}
   }
 }
@@ -352,7 +486,7 @@ function renderDateNav() {
     chip.className = `date-chip ${index === currentDayIndex ? 'active' : ''}`;
     chip.id = `date-chip-${index}`;
     const hasBooked = bookedDays.has(index);
-    const shortDay = day.dayName.split(' ')[0].substring(0, 3);
+    const shortDay = formatWeekdayLabel(day.date);
     chip.innerHTML = `
       ${hasBooked ? '<span class="booked-dot" title="Alınmış Tren Bileti Günü"></span>' : ''}
       <span class="day-Label">G${index} • ${shortDay}</span>
@@ -469,22 +603,50 @@ function buildTomorrowBriefingHtml(index) {
   `;
 }
 
-// Quick Log Daily Meals / Pass to Budget Ledger
-function logDayAmountToBudget(title, category, amountJPY) {
-  if (!amountJPY || amountJPY <= 0) {
+// Quick Log Daily Meals / Pass to Budget Ledger (with duplicate-safe estimate tagging)
+function logDayAmountToBudget(title, category, amountJPY, meta) {
+  const num = Number(amountJPY) || 0;
+  if (!num || num <= 0) {
     showToast('Bu kalem için 0 JPY dışında tutar bulunamadı');
     return;
   }
+  if (!Array.isArray(appState.expenses)) appState.expenses = [];
+  const opts = meta || {};
+  const entryType = opts.entryType || 'estimate';
+  const sourceKey = opts.sourceKey || '';
+
+  if (sourceKey) {
+    const existing = appState.expenses.find(e => e.sourceKey === sourceKey);
+    if (existing) {
+      if (Number(existing.amountJPY) === num && existing.title === title) {
+        showToast('Bu günün tahmini zaten defterde kayıtlı');
+        return;
+      }
+      existing.title = title;
+      existing.category = category;
+      existing.amountJPY = num;
+      existing.entryType = entryType;
+      saveMasterState();
+      renderDay(currentDayIndex);
+      renderBudget();
+      showToast(`Gün tahmini güncellendi: ¥${num.toLocaleString()}`);
+      return;
+    }
+  }
+
   appState.expenses.unshift({
-    id: Date.now(),
+    id: Date.now() + Math.floor(Math.random() * 1000),
     title,
     category,
-    amountJPY: Number(amountJPY),
+    amountJPY: num,
+    entryType,
+    ...(sourceKey ? { sourceKey } : {}),
     date: itineraryData[currentDayIndex]?.date || new Date().toLocaleDateString('tr-TR')
   });
   saveMasterState();
+  if (sourceKey) renderDay(currentDayIndex);
   renderBudget();
-  showToast(`¥${Number(amountJPY).toLocaleString()} bütçe defterine işlendi`);
+  showToast(`¥${num.toLocaleString()} (${entryType === 'estimate' ? 'tahmin' : 'gider'}) deftere işlendi`);
 }
 
 function parseFirstYenNumber(str) {
@@ -502,9 +664,7 @@ function renderDay(index) {
   const dModes = appState.dayModes[day.id] || { lighten: false, rain: false };
   const activePlanRec = appState.dayPlans ? appState.dayPlans[day.id] : null;
   const activePlan = activePlanRec && activePlanRec.current ? activePlanRec.current : null;
-  const displayStops = (typeof koyoPlanner !== 'undefined')
-    ? koyoPlanner.overlay(day, activePlan, appState.completedStops)
-    : day.stops.map((s, idx) => ({ ...s, origIndex: idx, sid: s.stopId || `${day.id}-s${idx}`, originalTime: s.time, plannerChanged: false }));
+  const displayStops = resolveDayStopsWithState(day);
 
   const mealChoice = appState.selectedMeals[day.id] || { lunchIdx: 0, dinnerIdx: 0 };
 
@@ -555,7 +715,10 @@ function renderDay(index) {
   // Next Stop Spotlight
   let spotlightHtml = '';
   if (nextStop) {
-    const routeUrl = buildDirUrl(nextStop.originQuery || day.accommodation, nextStop.mapsQuery);
+    const routeUrl = buildDirUrl(
+      nextStop.originQuery ? mapFieldText(nextStop, 'originQuery') : mapFieldText(day, 'accommodation'),
+      mapFieldText(nextStop, 'mapsQuery', nextStop.name)
+    );
     const nextSid = nextStop.stopId || `${day.id}-s${nextStopIdx}`;
     spotlightHtml = `
       <div class="next-stop-spotlight">
@@ -570,6 +733,7 @@ function renderDay(index) {
           <div style="font-size:0.76rem; color:var(--text-secondary); margin-top:2px;">
             ${nextStop.duration} • ${nextStop.reservationStatus || 'Hazır'}
           </div>
+          ${nextStop.activeMealLabel ? `<div class="meal-sync-pill">${ico('utensils')} <span>${nextStop.activeMealLabel}</span></div>` : ''}
         </div>
         <div style="display:flex; gap:6px; flex-shrink:0;">
           <a href="${routeUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-route">
@@ -634,8 +798,11 @@ function renderDay(index) {
         const isDropped = dModes.lighten && stop.isOptionalDrop;
         const isOpen = allDrawersExpanded || isBooked;
 
-        const placeUrl = buildPlaceUrl(stop.mapsQuery);
-        const dirUrl = buildDirUrl(stop.originQuery || day.accommodation, stop.mapsQuery);
+        const placeUrl = buildPlaceUrl(mapFieldText(stop, 'mapsQuery', stop.name));
+        const dirUrl = buildDirUrl(
+          stop.originQuery ? mapFieldText(stop, 'originQuery') : mapFieldText(day, 'accommodation'),
+          mapFieldText(stop, 'mapsQuery', stop.name)
+        );
 
         let transitConnectorHtml = '';
         if (stop.transitToNext && stop.transitToNext.method) {
@@ -662,7 +829,10 @@ function renderDay(index) {
               </div>
 
               <div class="stop-main-row">
-                <h3 class="stop-heading" onclick="toggleStopDrawer('${sid}')">${stop.name}</h3>
+                <div style="min-width:0; flex:1;">
+                  <h3 class="stop-heading" onclick="toggleStopDrawer('${sid}')">${stop.name}</h3>
+                  ${stop.activeMealLabel ? `<div class="meal-sync-pill">${ico('utensils')} <span>${stop.activeMealLabel}</span></div>` : ''}
+                </div>
                 <button class="done-check-btn ${isDone ? 'checked' : ''}" onclick="toggleStopDone('${sid}')" title="Tamamlandı Olarak İşaretle" aria-label="Durak Tamamlandı">
                   ${ico('check')}
                 </button>
@@ -698,7 +868,10 @@ function renderDay(index) {
 
   const dynamicFoodTotalJPY = (activeLunch ? activeLunch.cost2pJPY : 0) + (activeDinner ? activeDinner.cost2pJPY : 0);
   const passJPY = parseFirstYenNumber(day.passDecision.totalCost);
-  const homeReturnUrl = buildDirUrl('', day.accommodation.split('(')[0].trim());
+  const fx = getFxRate();
+  const foodLogged = (appState.expenses || []).some(e => e.sourceKey === `${day.id}-food`);
+  const passLogged = (appState.expenses || []).some(e => e.sourceKey === `${day.id}-pass`);
+  const homeReturnUrl = buildDirUrl('', mapFieldText(day, 'accommodation').split('(')[0].trim());
 
   const dayChecklistHtml = (day.checklist || []).map((item, cIdx) => {
     const cid = `${day.id}-chk-${cIdx}`;
@@ -729,7 +902,7 @@ function renderDay(index) {
         <div class="day-hero">
           <div class="day-hero-kanji">${day.kanji || '日本'}</div>
           <div class="day-meta-chips">
-            <span class="hero-badge">${day.date} • ${day.dayName}</span>
+            <span class="hero-badge">${day.date} • ${formatWeekdayLabel(day.date, true)}</span>
             <span class="hero-chip-muted">${day.weatherTemp || '15°C'} • ${day.regionTag || day.city}</span>
             <span class="jst-live-strip tabular">${jstLive.timeStr} • ${jstLive.phaseLabel}</span>
           </div>
@@ -807,8 +980,8 @@ function renderDay(index) {
           ${dayChecklistHtml}
           <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; font-size:0.83rem;">
             <div>
-              <span style="color:var(--text-muted); display:block; font-size:0.7rem; font-weight:700;">SEÇİLİ RESTORAN (2 KİŞİ)</span>
-              <strong class="tabular" style="color:var(--matcha); font-size:0.96rem;">¥${dynamicFoodTotalJPY.toLocaleString()} (~$${Math.round(dynamicFoodTotalJPY / 150)})</strong>
+              <span style="color:var(--text-muted); display:block; font-size:0.7rem; font-weight:700;">SEÇİLİ RESTORAN (2 KİŞİ TAHMİNİ)</span>
+              <strong class="tabular" style="color:var(--matcha); font-size:0.96rem;">¥${dynamicFoodTotalJPY.toLocaleString()} (~$${Math.round(dynamicFoodTotalJPY / fx)})</strong>
             </div>
             <div style="text-align:right;">
               <span style="color:var(--text-muted); display:block; font-size:0.7rem; font-weight:700;">GÜN TAHMİNİ (TÜM KALEMLER)</span>
@@ -816,12 +989,12 @@ function renderDay(index) {
             </div>
           </div>
           <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
-            <button class="action-chip map-place" style="flex:1; justify-content:center;" onclick="logDayAmountToBudget('${escapeAttr(day.date + ' Öğle + Akşam Yemek')}', 'Yeme - İçme & Günlük Market', ${dynamicFoodTotalJPY})">
-              ${ico('plus')} <span>Yemeği Bütçeye İşle</span>
+            <button class="action-chip map-place" style="flex:1; justify-content:center;" onclick="logDayAmountToBudget('${escapeAttr(day.date + ' Öğle + Akşam Yemek (Tahmin)')}', 'Yeme - İçme & Günlük Market', ${dynamicFoodTotalJPY}, { entryType: 'estimate', sourceKey: '${day.id}-food' })">
+              ${ico(foodLogged ? 'check' : 'plus')} <span>${foodLogged ? 'Yemek Tahmini İşlendi' : 'Yemek Tahminini İşle'}</span>
             </button>
             ${passJPY > 0 ? `
-              <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="logDayAmountToBudget('${escapeAttr(day.date + ' ' + day.passDecision.name)}', 'Kalan Ulaşım, IC Kart & Giriş Ücretleri', ${passJPY})">
-                ${ico('plus')} <span>Ulaşımı İşle</span>
+              <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="logDayAmountToBudget('${escapeAttr(day.date + ' ' + day.passDecision.name + ' (Tahmin)')}', 'Kalan Ulaşım, IC Kart & Giriş Ücretleri', ${passJPY}, { entryType: 'estimate', sourceKey: '${day.id}-pass' })">
+                ${ico(passLogged ? 'check' : 'plus')} <span>${passLogged ? 'Ulaşım Tahmini İşlendi' : 'Ulaşım Tahminini İşle'}</span>
               </button>
             ` : ''}
           </div>
@@ -845,7 +1018,7 @@ function renderDay(index) {
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <h3 class="timeline-heading">Kapıdan Kapıya Zaman Çizelgesi</h3>
               <a href="${fullDayMapUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-route" style="min-height:34px; padding:4px 10px;">
-                ${ico('route')} <span>Tüm Günü Haritada Gör</span>
+                ${ico('route')} <span>Günün Rota Özeti</span>
               </a>
               <button class="action-chip ${osmPanelOpen ? 'map-place' : ''}" onclick="toggleDayOsmMap(${index})" style="min-height:34px; padding:4px 10px;">
                 ${ico('pin')} <span>${osmPanelOpen ? 'Haritayı Gizle' : 'Canlı Harita (OSM)'}</span>
@@ -918,7 +1091,7 @@ function renderDay(index) {
 function renderMealOptionBlock(dayId, mealType, titleLabel, options, activeIdx) {
   if (!options || !options.length) return '';
   const opt = options[activeIdx] || options[0];
-  const mapUrl = buildPlaceUrl(opt.mapsQuery || opt.name);
+  const mapUrl = buildPlaceUrl(mapFieldText(opt, 'mapsQuery', opt.name));
   const perPerson = Number(opt.costPerPersonJPY) || 0;
   const meterPct = Math.min(100, Math.round((perPerson / 3000) * 100));
   const meterColor = perPerson <= 2000 ? 'var(--matcha)' : (perPerson <= 3000 ? 'var(--gold)' : 'var(--vermilion)');
@@ -1074,7 +1247,7 @@ function renderHalal() {
               </div>
               <div style="font-size:0.75rem; font-weight:700; color:var(--sky); margin:3px 0;">${b.type}</div>
               <p style="font-size:0.81rem; color:var(--text-secondary); margin-bottom:8px;">${b.highlight}</p>
-              <a href="${buildPlaceUrl(b.mapsQuery)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">
+              <a href="${buildPlaceUrl(mapFieldText(b))}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">
                 ${ico('pin')} <span>Haritada Aç</span>
               </a>
             </div>
@@ -1119,7 +1292,7 @@ function renderHalal() {
 
       ${marketBasketsData && marketBasketsData.length ? `
         <div class="editorial-card" style="margin-top:16px; border-left:4px solid var(--sky);">
-          <span class="section-eyebrow" style="color:var(--sky);">Codex Colab • Günlük Hazır Alışveriş Listeleri</span>
+          <span class="section-eyebrow" style="color:var(--sky);">Günlük Hazır Alışveriş Listeleri</span>
           <h3 style="font-size:1.06rem; font-weight:800; margin-bottom:4px;">Şehre Göre Market &amp; Tren Kumanyası Sepetleri (7 Liste)</h3>
           <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Fuji günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
           <div class="grid-2col">
@@ -1710,14 +1883,25 @@ function renderBudget() {
   const container = document.getElementById('budget-container');
   if (!container || !budgetData.categories) return;
 
+  const fx = getFxRate();
   const spentByCat = {};
-  let totalSpentJPY = 0;
+  let actualSpentJPY = 0;
+  let estimatedSpentJPY = 0;
+  let icTransferJPY = 0;
+
   (appState.expenses || []).forEach(exp => {
     const amt = Number(exp.amountJPY) || 0;
+    const etype = exp.entryType || 'actual';
+    if (etype === 'transfer') {
+      icTransferJPY += amt;
+      return;
+    }
+    if (etype === 'estimate') estimatedSpentJPY += amt;
+    else actualSpentJPY += amt;
     spentByCat[exp.category] = (spentByCat[exp.category] || 0) + amt;
-    totalSpentJPY += amt;
   });
 
+  const totalSpentJPY = actualSpentJPY + estimatedSpentJPY;
   const remainingJPY = budgetData.totalBudgetJPY - totalSpentJPY;
 
   const categoriesHtml = budgetData.categories.map(c => {
@@ -1740,30 +1924,42 @@ function renderBudget() {
           <div style="width:${pct}%; height:100%; background:${pct > 90 ? 'var(--vermilion)' : 'var(--matcha)'};"></div>
         </div>
         <div class="tabular" style="display:flex; justify-content:space-between; font-size:0.73rem; color:var(--text-muted); margin-top:4px;">
-          <span>Harcanan: ¥${spent.toLocaleString()} ($${Math.round(spent / 150)})</span>
+          <span>Tüketilen (Gerçek+Tahmin): ¥${spent.toLocaleString()} ($${Math.round(spent / fx)})</span>
           <span>Kalan: ¥${Math.max(0, c.budgetJPY - spent).toLocaleString()}</span>
         </div>
       </div>
     `;
   }).join('');
 
-  const filteredExpenses = currentBudgetFilter === 'Tümü'
+  const catFiltered = currentBudgetFilter === 'Tümü'
     ? (appState.expenses || [])
     : (appState.expenses || []).filter(e => e.category === currentBudgetFilter);
 
+  const filteredExpenses = currentBudgetEntryFilter === 'all'
+    ? catFiltered
+    : catFiltered.filter(e => (e.entryType || 'actual') === currentBudgetEntryFilter);
+
+  const entryPillMeta = {
+    actual: { label: 'GERÇEK', cls: 'is-actual' },
+    estimate: { label: 'TAHMİN', cls: 'is-estimate' },
+    transfer: { label: 'IC TRANSFER', cls: 'is-transfer' }
+  };
+
   const expensesListHtml = filteredExpenses.length === 0
-    ? `<p style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:12px 0;">Bu kategoride henüz harcama kaydı yok.</p>`
+    ? `<p style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:12px 0;">Bu filtrede henüz kayıt yok.</p>`
     : filteredExpenses.map(e => {
         const realIdx = (appState.expenses || []).findIndex(x => x.id === e.id);
+        const etype = e.entryType || 'actual';
+        const badge = entryPillMeta[etype] || entryPillMeta.actual;
         return `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-subtle); font-size:0.84rem; gap:8px;">
             <div style="min-width:0;">
-              <strong>${e.title}</strong>
+              <strong>${e.title}</strong><span class="entry-type-pill ${badge.cls}">${badge.label}</span>
               <span style="font-size:0.73rem; color:var(--text-muted); display:block;">${e.category} • ${e.date}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-              <strong class="tabular" style="color:var(--vermilion);">¥${Number(e.amountJPY).toLocaleString()} ($${Math.round(e.amountJPY / 150)})</strong>
-              <button class="delete-exp-btn" onclick="deleteExpense(${realIdx >= 0 ? realIdx : 0})" aria-label="Harcamayı Sil">✕</button>
+              <strong class="tabular" style="color:${etype === 'transfer' ? 'var(--sky)' : 'var(--vermilion)'};">¥${Number(e.amountJPY).toLocaleString()} ($${Math.round(e.amountJPY / fx)})</strong>
+              <button class="delete-exp-btn" onclick="deleteExpense(${realIdx >= 0 ? realIdx : 0})" aria-label="Kaydı Sil">✕</button>
             </div>
           </div>
         `;
@@ -1788,25 +1984,30 @@ function renderBudget() {
           </div>
           <div class="day-key-grid" style="margin-bottom:0;">
             <div>
-              <span class="day-key-label">Kayıtlı Harcama</span>
-              <span class="day-key-val tabular">¥${totalSpentJPY.toLocaleString()} (~$${Math.round(totalSpentJPY / 150)})</span>
+              <span class="day-key-label">Gerçek + Tahmin Düşülen</span>
+              <span class="day-key-val tabular">¥${totalSpentJPY.toLocaleString()} (~$${Math.round(totalSpentJPY / fx)})</span>
+              <span style="display:block; font-size:0.68rem; color:#cbd5e1; margin-top:2px;">Gerçek: ¥${actualSpentJPY.toLocaleString()} • Tahmin: ¥${estimatedSpentJPY.toLocaleString()}</span>
             </div>
             <div>
               <span class="day-key-label">Kalan Bütçe</span>
-              <span class="day-key-val tabular" style="color:#34d399;">¥${remainingJPY.toLocaleString()} (~$${Math.round(remainingJPY / 150)})</span>
+              <span class="day-key-val tabular" style="color:#34d399;">¥${remainingJPY.toLocaleString()} (~$${Math.round(remainingJPY / fx)})</span>
+              <span style="display:block; font-size:0.68rem; color:#93c5fd; margin-top:2px;">IC Kart Yükleme (Transfer): ¥${icTransferJPY.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
         <div class="editorial-card">
-          <h3 style="font-size:0.96rem; font-weight:800; margin-bottom:10px;">Suica / ICOCA &amp; Ortak Nakit Kasası</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <h3 style="font-size:0.96rem; font-weight:800;">Suica / ICOCA &amp; Ortak Nakit Kasası</h3>
+            <span style="font-size:0.71rem; color:var(--sky); font-weight:700;">Yüklemeler transfer sayılır (bütçeden çift düşmez)</span>
+          </div>
           <div class="wallet-mini-grid">
             <div class="wallet-box">
               <span style="font-size:0.68rem; font-weight:800; color:var(--text-muted); display:block;">HASAN IC KART</span>
               <strong class="tabular" style="font-size:1.05rem; color:var(--sky);">¥${(appState.icBalances?.hasan || 0).toLocaleString()}</strong>
               <div class="stepper-row">
                 <button class="stepper-btn" onclick="adjustWalletBalance('hasan', -500)">-500</button>
-                <button class="stepper-btn" onclick="adjustWalletBalance('hasan', 1000)">+1K</button>
+                <button class="stepper-btn" onclick="recordIcTransfer('hasan', 2000)">+2K Yükle</button>
               </div>
             </div>
             <div class="wallet-box">
@@ -1814,7 +2015,7 @@ function renderBudget() {
               <strong class="tabular" style="font-size:1.05rem; color:var(--sky);">¥${(appState.icBalances?.es || 0).toLocaleString()}</strong>
               <div class="stepper-row">
                 <button class="stepper-btn" onclick="adjustWalletBalance('es', -500)">-500</button>
-                <button class="stepper-btn" onclick="adjustWalletBalance('es', 1000)">+1K</button>
+                <button class="stepper-btn" onclick="recordIcTransfer('es', 2000)">+2K Yükle</button>
               </div>
             </div>
             <div class="wallet-box">
@@ -1835,10 +2036,10 @@ function renderBudget() {
 
         <div class="editorial-card">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-            <h3 style="font-size:0.96rem; font-weight:800;">Hızlı Kur Çevirici (<span class="tabular">1$ = ${getFxRate()}¥</span>)</h3>
+            <h3 style="font-size:0.96rem; font-weight:800;">Hızlı Kur Çevirici (<span class="tabular">1$ = ${fx}¥</span>)</h3>
             <label style="font-size:0.72rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:5px;">
               Planlama Kuru (¥):
-              <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${getFxRate()}" class="search-input tabular" style="width:74px; min-height:34px; padding:3px 8px;" onchange="updatePlanningFxRate(this.value)">
+              <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${fx}" class="search-input tabular" style="width:74px; min-height:34px; padding:3px 8px;" onchange="updatePlanningFxRate(this.value)">
             </label>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -1859,10 +2060,10 @@ function renderBudget() {
 
       <div>
         <div class="editorial-card">
-          <h3 style="font-size:1rem; font-weight:800; margin-bottom:8px;">Harcama Kaydet</h3>
+          <h3 style="font-size:1rem; font-weight:800; margin-bottom:8px;">Gerçek Harcama &amp; IC Transfer Kaydı</h3>
           <div class="pill-filter-row" style="margin-bottom:10px;">
-            <button class="filter-pill-btn" onclick="quickAddPreset('Öğle / Akşam Yemeği', 'Yeme - İçme & Günlük Market', 2200)">+¥2.200 Yemek</button>
-            <button class="filter-pill-btn" onclick="quickAddPreset('Suica / ICOCA Yükleme', 'Kalan Ulaşım, IC Kart & Giriş Ücretleri', 2000)">+¥2.000 IC</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('Öğle / Akşam Yemeği', 'Yeme - İçme & Günlük Market', 2200)">+¥2.200 Gerçek Yemek</button>
+            <button class="filter-pill-btn" onclick="recordIcTransfer('hasan', 2000)">+¥2.000 IC Transfer</button>
             <button class="filter-pill-btn" onclick="quickAddPreset('7-Eleven / Market Sepeti', 'Yeme - İçme & Günlük Market', 800)">+¥800 Market</button>
           </div>
           <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
@@ -1874,8 +2075,15 @@ function renderBudget() {
               <input type="number" id="exp-jpy" class="search-input tabular" style="padding:9px 12px;" placeholder="Tutar (JPY ¥)">
             </div>
             <button class="hdr-btn hdr-primary" onclick="addExpense()" style="justify-content:center; border-radius:var(--radius-md); min-height:44px;">
-              Harcamayı Bütçeye İşle
+              Gerçek Harcamayı İşle
             </button>
+          </div>
+
+          <div class="pill-filter-row" style="margin-bottom:6px;">
+            <button class="filter-pill-btn ${currentBudgetEntryFilter === 'all' ? 'active' : ''}" onclick="filterBudgetEntryType('all')">Tüm Türler</button>
+            <button class="filter-pill-btn ${currentBudgetEntryFilter === 'actual' ? 'active' : ''}" onclick="filterBudgetEntryType('actual')">Gerçek</button>
+            <button class="filter-pill-btn ${currentBudgetEntryFilter === 'estimate' ? 'active' : ''}" onclick="filterBudgetEntryType('estimate')">Tahmin</button>
+            <button class="filter-pill-btn ${currentBudgetEntryFilter === 'transfer' ? 'active' : ''}" onclick="filterBudgetEntryType('transfer')">IC Transfer</button>
           </div>
 
           <div class="pill-filter-row" style="margin-bottom:6px;">
@@ -1900,9 +2108,31 @@ function adjustWalletBalance(key, delta) {
   saveMasterState();
   renderBudget();
 }
+
+function recordIcTransfer(cardKey, amountJPY) {
+  const amt = Math.max(0, Number(amountJPY) || 0);
+  if (!amt) return;
+  if (!appState.icBalances) appState.icBalances = { hasan: 3000, es: 3000, cashJPY: 35000 };
+  const targetKey = cardKey === 'es' ? 'es' : 'hasan';
+  appState.icBalances[targetKey] = (Number(appState.icBalances[targetKey]) || 0) + amt;
+  if (!Array.isArray(appState.expenses)) appState.expenses = [];
+  appState.expenses.unshift({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    title: `${targetKey === 'es' ? 'Eşi' : 'Hasan'} IC Kart Yükleme (Transfer)`,
+    category: 'Kalan Ulaşım, IC Kart & Giriş Ücretleri',
+    amountJPY: amt,
+    entryType: 'transfer',
+    date: itineraryData[currentDayIndex]?.date || new Date().toLocaleDateString('tr-TR')
+  });
+  saveMasterState();
+  renderBudget();
+  showToast(`+¥${amt.toLocaleString()} IC Transfer (${targetKey === 'es' ? 'Eşi' : 'Hasan'}) kaydedildi`);
+}
+
+function filterBudgetEntryType(etype) { currentBudgetEntryFilter = etype; renderBudget(); }
 function filterBudgetExpenses(cat) { currentBudgetFilter = cat; renderBudget(); }
 function quickAddPreset(title, category, amountJPY) {
-  appState.expenses.unshift({ id: Date.now(), title, category, amountJPY, date: new Date().toLocaleDateString('tr-TR') });
+  appState.expenses.unshift({ id: Date.now(), title, category, amountJPY, entryType: 'actual', date: new Date().toLocaleDateString('tr-TR') });
   saveMasterState();
   renderBudget();
   showToast(`+${title} (¥${amountJPY.toLocaleString()}) eklendi`);
@@ -1955,16 +2185,22 @@ function addExpense() {
     showToast('Lütfen tutar (JPY) girin');
     return;
   }
+  const val = Number(jpyEl.value);
+  if (!Number.isFinite(val) || val <= 0) {
+    showToast('Geçerli bir JPY tutarı girin');
+    return;
+  }
   appState.expenses.unshift({
-    id: Date.now(),
-    title: titleEl.value || 'Harcama',
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    title: titleEl.value.trim() || 'Harcama',
     category: catEl ? catEl.value : 'Yeme - İçme & Günlük Market',
-    amountJPY: Number(jpyEl.value),
+    amountJPY: val,
+    entryType: 'actual',
     date: new Date().toLocaleDateString('tr-TR')
   });
   saveMasterState();
   renderBudget();
-  showToast('Harcama bütçeye işlendi');
+  showToast('Gerçek harcama bütçeye işlendi');
 }
 
 function deleteExpense(idx) {
@@ -2212,9 +2448,10 @@ function renderCrisisModal() {
         <h4 style="font-weight:800; margin-bottom:6px;">Enerji Koruma &amp; Hafifletme</h4>
         <p style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:8px;">${day.lightenPlan}</p>
         ${firstMarket ? `<div style="font-size:0.82rem; background:var(--card-tint); border:1px solid var(--border); padding:8px 10px; border-radius:8px; margin-bottom:10px;">En yakın konbini/market: <strong>${firstMarket.name}</strong> (${firstMarket.walk})</div>` : ''}
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="action-chip map-place" style="flex:1; justify-content:center;" onclick="toggleDayMode('${day.id}', 'lighten'); closeCrisisModal(); switchTab('itinerary');">Esnek Durağı Çıkar</button>
-          <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="closeCrisisModal(); openTaxiCardForDay(${currentDayIndex});">Taksi Kartı</button>
+          <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="closeCrisisModal(); switchTab('itinerary'); openPlannerModal('light');">Planlayıcıyı Aç</button>
+          <button class="action-chip" style="flex:1; justify-content:center;" onclick="closeCrisisModal(); openTaxiCardForDay(${currentDayIndex});">Taksi Kartı</button>
         </div>
       </div>
     `;
@@ -2227,7 +2464,7 @@ function renderCrisisModal() {
           <div style="background:var(--card-tint); border:1px solid var(--border); padding:10px 12px; border-radius:8px; margin-bottom:8px;">
             <strong style="font-size:0.88rem;">${i === 0 ? '1. Ana:' : '2. Yedek:'} ${m.name}</strong>
             <div style="font-size:0.77rem; color:var(--text-muted); margin:2px 0;">${m.hours} • ~¥${m.costPerPersonJPY}/kişi</div>
-            <a href="${buildPlaceUrl(m.mapsQuery || m.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="margin-top:4px;">${ico('pin')} <span>Konuma Git</span></a>
+            <a href="${buildPlaceUrl(mapFieldText(m, 'mapsQuery', m.name))}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="margin-top:4px;">${ico('pin')} <span>Konuma Git</span></a>
           </div>
         `).join('')}
         <button class="hdr-btn hdr-primary" style="width:100%; justify-content:center;" onclick="closeCrisisModal(); openStaffModal('私はイスラム教徒です。豚肉とアルコール（みりん・料理酒）を食べることができません。', 'Watashi wa Isuramu-kyōto desu.', 'Ben Müslümanım. Domuz eti ve alkol tüketemiyorum.')">
@@ -2238,14 +2475,17 @@ function renderCrisisModal() {
   } else if (currentCrisisMode === 'late') {
     detailHtml = `
       <div class="editorial-card" style="border-left:4px solid var(--vermilion); margin-bottom:0;">
-        <h4 style="font-weight:800; margin-bottom:6px;">Geç Kaldık — Hangisini Atlayalım?</h4>
+        <h4 style="font-weight:800; margin-bottom:6px;">Geç Kaldık — Planı Esnet &amp; Saat Kaydır</h4>
         <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:8px;">
           ${bookedStops.length ? `Bugün <strong>${bookedStops[0].name} (${bookedStops[0].time})</strong> sabit tren/giriş durağı var!` : 'Bugün sabit tren saati yok; bahçe/tapınak kapanışlarına (16:30–17:00) dikkat edin.'}
         </p>
-        <div style="background:var(--vermilion-soft); padding:9px 11px; border-radius:8px; font-size:0.82rem;">
+        <div style="background:var(--vermilion-soft); padding:9px 11px; border-radius:8px; font-size:0.82rem; margin-bottom:10px;">
           <strong>İlk Çıkarılacak Durak(lar):</strong><br>
           ${optionalStops.length ? optionalStops.map(o => `• ${o.name} (${o.time})`).join('<br>') : day.lightenPlan}
         </div>
+        <button class="hdr-btn hdr-primary" style="width:100%; justify-content:center;" onclick="closeCrisisModal(); switchTab('itinerary'); openPlannerModal('delay');">
+          Esnek Planlayıcıyı Aç (Saat Kaydır / Çakışma Kontrolü)
+        </button>
       </div>
     `;
   } else {
@@ -2344,7 +2584,7 @@ function openWalletModal() {
       <div style="font-size:0.78rem; color:var(--sky); font-weight:700; margin-bottom:4px;">${a.station}</div>
       <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:8px;">${a.notes}</p>
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
-        <a href="${buildPlaceUrl(a.mapsQuery)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="flex:1; justify-content:center;">${ico('pin')} <span>Harita</span></a>
+        <a href="${buildPlaceUrl(mapFieldText(a))}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="flex:1; justify-content:center;">${ico('pin')} <span>Harita</span></a>
         <button class="action-chip" style="flex:1; justify-content:center;" onclick="copyTextQuick('${escapeAttr(a.addressEn + ' (' + a.addressJp + ')')}', 'Adres panoya kopyalandı')">${ico('copy')} <span>Kopyala</span></button>
         <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="closeWalletModal(); openStaffModal('運転手さん、次の住所までお願いします：\\n${escapeAttr(a.addressJp)}', '${escapeAttr(a.addressEn)}', 'Taksici Kartı: ${escapeAttr(a.name)}');">${ico('taxi')} <span>Taksi</span></button>
       </div>
@@ -2425,11 +2665,12 @@ function openSyncModal() {
 
     <div class="editorial-card">
       <h4 style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">2. Satır İçi Yedek Kodu Dışa / İçe Aktar</h4>
-      <textarea id="sync-code-area" class="radar-textarea" placeholder="Dışa aktar dediğinizde kod buraya çıkar; eşinizden gelen kodu buraya yapıştırıp Yükle'ye basın."></textarea>
-      <div style="display:flex; gap:8px;">
+      <textarea id="sync-code-area" class="radar-textarea" placeholder="Dışa aktar dediğinizde kod buraya çıkar; eşinizden gelen kodu buraya yapıştırıp Önizle / Yükle'ye basın."></textarea>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="action-chip map-place" onclick="exportStateInline()" style="flex:1; justify-content:center;">Kodu Üret &amp; Kopyala</button>
-        <button class="action-chip map-route" onclick="importStateInline()" style="flex:1; justify-content:center;">Kodu Yükle</button>
+        <button class="action-chip map-route" onclick="previewImportStateInline()" style="flex:1; justify-content:center;">Kodu Önizle &amp; Birleştir</button>
       </div>
+      <div id="sync-preview-container"></div>
     </div>
 
     <div class="editorial-card" style="margin-bottom:0;">
@@ -2464,6 +2705,92 @@ function exportStateInline() {
   const area = document.getElementById('sync-code-area');
   if (area) area.value = jsonStr;
   copyTextQuick(jsonStr, 'Veri kodu üretildi ve kopyalandı');
+}
+
+function cloneAppStateSnapshot() {
+  return JSON.parse(JSON.stringify(appState));
+}
+
+function parseSyncRawText(raw) {
+  const txt = String(raw || '').trim();
+  if (!txt) return null;
+  return txt.includes('#sync=')
+    ? JSON.parse(decodeURIComponent(escape(atob(txt.split('#sync=')[1]))))
+    : JSON.parse(txt);
+}
+
+function analyzeIncomingState(incoming) {
+  if (!incoming || typeof incoming !== 'object') {
+    return { valid: false, formatLabel: 'Geçersiz', newExpenses: 0, newItems: 0, conflictCount: 0 };
+  }
+  let newExpenses = 0;
+  let newItems = 0;
+  let conflictCount = 0;
+  const existingIds = new Set((appState.expenses || []).map(e => String(e.id)));
+
+  if (incoming.format === 'japan-guide-backup-v1' && incoming.records) {
+    const recTrip = incoming.records['japan-trip-v4'] || {};
+    const recPrep = incoming.records['japan-preparations-v1'] || {};
+    const recNotes = incoming.records['japan-daily-notes'] || {};
+    const recQuotes = incoming.records['japan-quotes-v1'] || {};
+
+    Object.entries(recPrep).forEach(([k, v]) => {
+      if (v && !(appState.prepBookings && appState.prepBookings[k])) newItems++;
+    });
+    Object.entries(recNotes).forEach(([dateKey, text]) => {
+      const dayObj = itineraryData.find(d => d.date === dateKey);
+      if (dayObj && text) {
+        if (!appState.notes[dayObj.id]) newItems++;
+        else if (appState.notes[dayObj.id] !== text) conflictCount++;
+      }
+    });
+    Object.entries(recQuotes).forEach(([cat, q]) => {
+      if (q) {
+        if (!(appState.storeQuotes && appState.storeQuotes[cat])) newItems++;
+        else if (JSON.stringify(appState.storeQuotes[cat]) !== JSON.stringify(q)) conflictCount++;
+      }
+    });
+    (recTrip.expenses || []).forEach(exp => {
+      if (exp && !existingIds.has(String(exp.id))) newExpenses++;
+    });
+    return { valid: true, formatLabel: 'Klasik Yedek (v1)', newExpenses, newItems, conflictCount };
+  }
+
+  const mapKeys = ['completedStops', 'checklist', 'prepBookings', 'marketBasket', 'basketChecks', 'shopInspections'];
+  mapKeys.forEach(mk => {
+    if (incoming[mk] && typeof incoming[mk] === 'object') {
+      Object.entries(incoming[mk]).forEach(([k, v]) => {
+        if (v && !(appState[mk] && appState[mk][k])) newItems++;
+      });
+    }
+  });
+  if (incoming.notes) {
+    Object.entries(incoming.notes).forEach(([k, v]) => {
+      if (v) {
+        if (!(appState.notes && appState.notes[k])) newItems++;
+        else if (appState.notes[k] !== v) conflictCount++;
+      }
+    });
+  }
+  if (incoming.shopPurchased) {
+    Object.entries(incoming.shopPurchased).forEach(([k, v]) => {
+      if (v && v.bought && !(appState.shopPurchased && appState.shopPurchased[k] && appState.shopPurchased[k].bought)) newItems++;
+    });
+  }
+  if (incoming.dayPlans) {
+    Object.entries(incoming.dayPlans).forEach(([k, v]) => {
+      if (v) {
+        if (!(appState.dayPlans && appState.dayPlans[k])) newItems++;
+        else if (JSON.stringify(appState.dayPlans[k]) !== JSON.stringify(v)) conflictCount++;
+      }
+    });
+  }
+  if (Array.isArray(incoming.expenses)) {
+    incoming.expenses.forEach(exp => {
+      if (exp && !existingIds.has(String(exp.id))) newExpenses++;
+    });
+  }
+  return { valid: true, formatLabel: 'Kōyō Master Durumu', newExpenses, newItems, conflictCount };
 }
 
 function mergePartnerState(incoming) {
@@ -2552,25 +2879,96 @@ function mergePartnerState(incoming) {
   return { addedExpenses, mergedItems };
 }
 
+function commitIncomingState(parsed) {
+  const snapshot = cloneAppStateSnapshot();
+  const stats = mergePartnerState(parsed);
+  const saveRes = saveMasterState();
+  if (!saveRes.ok) {
+    appState = snapshot;
+    pendingImportPayload = null;
+    showToast('Depolama hatası: Değişiklikler güvenli şekilde geri alındı');
+    return { ok: false, stats };
+  }
+  pendingImportPayload = null;
+  applyTheme();
+  updateMapProviderButton();
+  renderDay(currentDayIndex);
+  renderHalal();
+  renderShopping();
+  renderBudget();
+  renderGuide();
+  return { ok: true, stats };
+}
+
+function previewImportStateInline() {
+  const area = document.getElementById('sync-code-area');
+  const prevBox = document.getElementById('sync-preview-container');
+  const raw = area ? area.value.trim() : '';
+  if (!raw) {
+    showToast('Önce eşinizden gelen veri kodunu veya JSON yedeğini yapıştırın');
+    return;
+  }
+  try {
+    const parsed = parseSyncRawText(raw);
+    const diff = analyzeIncomingState(parsed);
+    if (!diff.valid) throw new Error('Geçersiz nesne');
+    pendingImportPayload = parsed;
+    if (prevBox) {
+      prevBox.innerHTML = `
+        <div class="sync-preview-box">
+          <div style="font-weight:800; color:var(--text-main); margin-bottom:4px;">İçe Aktarma Önizlemesi (${diff.formatLabel})</div>
+          <div style="color:var(--text-secondary); line-height:1.5; margin-bottom:8px;">
+            • Eklenecek yeni harcama: <strong>+${diff.newExpenses}</strong><br>
+            • Eklenecek yeni işaret / not / plan: <strong>+${diff.newItems}</strong><br>
+            • Çakışan yerel kayıt (senin verin korunacak): <strong>${diff.conflictCount}</strong>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="hdr-btn hdr-primary" onclick="confirmImportState()" style="flex:1; justify-content:center; min-height:40px;">Birleştirmeyi Onayla &amp; Kaydet</button>
+            <button class="action-chip" onclick="cancelImportPreview()" style="justify-content:center;">Vazgeç</button>
+          </div>
+        </div>
+      `;
+    } else {
+      confirmImportState();
+    }
+  } catch (e) {
+    pendingImportPayload = null;
+    if (prevBox) prevBox.innerHTML = '';
+    showToast('Geçersiz veri kodu veya JSON formatı');
+  }
+}
+
+function confirmImportState() {
+  if (!pendingImportPayload) {
+    showToast('Önce önizlenecek geçerli bir yedek kodu girin');
+    return;
+  }
+  const res = commitIncomingState(pendingImportPayload);
+  if (res.ok) {
+    const prevBox = document.getElementById('sync-preview-container');
+    if (prevBox) prevBox.innerHTML = '';
+    closeSyncModal();
+    showToast(`Akıllı birleştirme tamam: +${res.stats.addedExpenses} harcama, +${res.stats.mergedItems} kayıt eklendi`);
+  }
+}
+
+function cancelImportPreview() {
+  pendingImportPayload = null;
+  const prevBox = document.getElementById('sync-preview-container');
+  if (prevBox) prevBox.innerHTML = '';
+}
+
 function importStateInline() {
   const area = document.getElementById('sync-code-area');
   const raw = area ? area.value.trim() : '';
   if (!raw) { showToast('Önce eşinizden gelen veri kodunu veya JSON yedeğini yapıştırın'); return; }
   try {
-    const parsed = raw.includes('#sync=')
-      ? JSON.parse(decodeURIComponent(escape(atob(raw.split('#sync=')[1]))))
-      : JSON.parse(raw);
-    const stats = mergePartnerState(parsed);
-    saveMasterState();
-    applyTheme();
-    updateMapProviderButton();
-    renderDay(currentDayIndex);
-    renderHalal();
-    renderShopping();
-    renderBudget();
-    renderGuide();
-    closeSyncModal();
-    showToast(`Akıllı birleştirme tamam: +${stats.addedExpenses} harcama, +${stats.mergedItems} kayıt eklendi`);
+    const parsed = parseSyncRawText(raw);
+    const res = commitIncomingState(parsed);
+    if (res.ok) {
+      closeSyncModal();
+      showToast(`Akıllı birleştirme tamam: +${res.stats.addedExpenses} harcama, +${res.stats.mergedItems} kayıt eklendi`);
+    }
   } catch (e) {
     showToast('Geçersiz veri kodu veya JSON formatı');
   }
@@ -2598,15 +2996,22 @@ async function pullFromCloudSync() {
     const res = await fetch(appState.cloudSyncUrl);
     const data = await res.json();
     if (data && typeof data === 'object') {
+      const snapshot = cloneAppStateSnapshot();
       const urlKeep = appState.cloudSyncUrl;
-      appState = Object.assign(appState, data, { cloudSyncUrl: urlKeep });
-      saveMasterState();
+      const stats = mergePartnerState(data);
+      appState.cloudSyncUrl = urlKeep;
+      const saveRes = saveMasterState();
+      if (!saveRes.ok) {
+        appState = snapshot;
+        showToast('Depolama hatası nedeniyle bulut verisi geri alındı');
+        return;
+      }
       renderDay(currentDayIndex);
       renderHalal();
       renderShopping();
       renderBudget();
       renderGuide();
-      showToast('Buluttaki güncel veriler yüklendi');
+      showToast(`Bulut verisi akıllı birleştirildi: +${stats.addedExpenses} harcama, +${stats.mergedItems} kayıt`);
     }
   } catch (e) {
     showToast('Buluta ulaşılamadı; yerel veri kodunu kullanabilirsiniz');
@@ -2624,6 +3029,14 @@ function setupEventListeners() {
   const searchInput = document.getElementById('global-search');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => handleSearch(e.target.value.toLowerCase()));
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    const syncNet = () => {
+      updateStorageBadge();
+      if (osmPanelOpen) renderDay(currentDayIndex);
+    };
+    window.addEventListener('online', syncNet);
+    window.addEventListener('offline', syncNet);
   }
 }
 
@@ -2731,7 +3144,7 @@ function buildAdvisorDeskHtml(dayIdx) {
   });
   const locked = remaining.filter((s, i) => typeof koyoPlanner !== 'undefined' && koyoPlanner.isProtectedStop(day, s, s.origIndex !== undefined ? s.origIndex : i));
   const fx = getFxRate();
-  const spentJPY = (appState.expenses || []).reduce((sum, e) => sum + (Number(e.amountJPY) || 0), 0);
+  const spentJPY = (appState.expenses || []).filter(e => e.entryType !== 'transfer').reduce((sum, e) => sum + (Number(e.amountJPY) || 0), 0);
   const spentUSD = Math.round(spentJPY / fx);
   const remUSD = (budgetData.totalBudgetUSD || 9000) - spentUSD;
   const pendingPrep = bookingsPrepData.filter(b => !(appState.prepBookings && appState.prepBookings[b.id]));
@@ -2739,7 +3152,7 @@ function buildAdvisorDeskHtml(dayIdx) {
 
   return `
     <div style="margin-bottom:14px;">
-      <span class="section-eyebrow" style="color:var(--vermilion);">Codex Colab • 3-Alan Akıllı Plan Denetimi (${day.date})</span>
+      <span class="section-eyebrow" style="color:var(--vermilion);">3-Alan Akıllı Plan Denetimi (${day.date})</span>
       <div class="advisor-desk-grid">
         <div class="advisor-mini-card" style="border-top:3px solid var(--sky);">
           <div>
@@ -3121,7 +3534,12 @@ function mountLeafletMapForDay(day, stops) {
   });
 
   if (!points.length) {
-    frame.innerHTML = '<div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--text-muted);">Bu gün için eşleşen kamusal harita pini bulunamadı; yukarıdaki "Tüm Günü Haritada Gör" düğmesini kullanabilirsiniz.</div>';
+    frame.innerHTML = '<div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--text-muted);">Bu gün için eşleşen kamusal harita pini bulunamadı; yukarıdaki "Günün Rota Özeti" düğmesini kullanabilirsiniz.</div>';
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false && typeof window.L === 'undefined') {
+    frame.innerHTML = '<div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--gold);"><strong>Çevrimdışı Mod:</strong> Harita karoları internet gerektirir. Yukarıdaki "Günün Rota Özeti" düğmesi ile Google / Apple Maps çevrimdışı haritanızı açabilirsiniz.</div>';
     return;
   }
 
@@ -3132,10 +3550,10 @@ function mountLeafletMapForDay(day, stops) {
       activeLeafletInstance = null;
     }
     frame.innerHTML = '';
-    const map = window.L.map(frame, { scrollWheelZoom: false });
+    const map = window.L.map(frame, { scrollWheelZoom: false, tap: false, minZoom: 10, maxZoom: 17 });
     activeLeafletInstance = map;
     window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
+      maxZoom: 17,
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
     const latLngs = points.map(p => [p.lat, p.lng]);
@@ -3146,7 +3564,7 @@ function mountLeafletMapForDay(day, stops) {
     if (latLngs.length > 1) {
       window.L.polyline(latLngs, { color: '#1b2845', weight: 3, dashArray: '6 6', opacity: 0.7 }).addTo(map);
     }
-    map.fitBounds(latLngs, { padding: [26, 26], maxZoom: 14 });
+    map.fitBounds(latLngs, { padding: [22, 22], maxZoom: 14 });
   };
 
   if (typeof window.L !== 'undefined') {

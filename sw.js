@@ -1,4 +1,4 @@
-const CACHE_NAME = 'japonya-2026-koyo-v7-enc';
+const CACHE_NAME = 'japonya-2026-koyo-v8-enc';
 const ASSETS = [
   './',
   './index.html',
@@ -22,7 +22,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k.startsWith('japonya-2026-koyo-') && k !== CACHE_NAME).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
