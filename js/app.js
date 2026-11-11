@@ -625,7 +625,7 @@ function logDayAmountToBudget(title, category, amountJPY, meta) {
     const existing = appState.expenses.find(e => e.sourceKey === sourceKey);
     if (existing) {
       if (Number(existing.amountJPY) === num && existing.title === title) {
-        showToast('Bu günün tahmini zaten defterde kayıtlı');
+        showToast(entryType === 'actual' ? 'Bu gider zaten defterde aynı tutarla kayıtlı' : 'Bu günün tahmini zaten defterde kayıtlı');
         return;
       }
       existing.title = title;
@@ -634,8 +634,9 @@ function logDayAmountToBudget(title, category, amountJPY, meta) {
       existing.entryType = entryType;
       saveMasterState();
       renderDay(currentDayIndex);
+      if (sourceKey.startsWith('shop-')) renderShopping();
       renderBudget();
-      showToast(`Gün tahmini güncellendi: ¥${num.toLocaleString()}`);
+      showToast(`${entryType === 'actual' ? 'Gider' : 'Gün tahmini'} güncellendi: ¥${num.toLocaleString()}`);
       return;
     }
   }
@@ -650,7 +651,10 @@ function logDayAmountToBudget(title, category, amountJPY, meta) {
     date: itineraryData[currentDayIndex]?.date || new Date().toLocaleDateString('tr-TR')
   });
   saveMasterState();
-  if (sourceKey) renderDay(currentDayIndex);
+  if (sourceKey) {
+    renderDay(currentDayIndex);
+    if (sourceKey.startsWith('shop-')) renderShopping();
+  }
   renderBudget();
   showToast(`¥${num.toLocaleString()} (${entryType === 'estimate' ? 'tahmin' : 'gider'}) deftere işlendi`);
 }
@@ -1753,9 +1757,16 @@ function renderShopping() {
                 <button class="action-chip ${purchaseRec.bought ? 'map-place' : ''}" onclick="toggleShopPurchased('${item.id}')">
                   ${ico('check')} <span>${purchaseRec.bought ? 'Alındı' : 'Aldık İşaretle'}</span>
                 </button>
-                ${purchaseRec.bought ? `
-                  <input type="number" class="search-input tabular" style="min-height:38px; padding:4px 10px; width:135px; font-size:16px;" placeholder="Ödenen ¥" value="${purchaseRec.paidJPY || ''}" onchange="updateShopPaid('${item.id}', this.value)">
-                ` : ''}
+                ${purchaseRec.bought ? (() => {
+                  const shopExp = (appState.expenses || []).find(e => e.sourceKey === `shop-${item.id}`);
+                  const syncedSame = shopExp && Number(shopExp.amountJPY) === Number(purchaseRec.paidJPY || 0);
+                  return `
+                    <input type="number" class="search-input tabular" style="min-height:38px; padding:4px 10px; width:125px; font-size:16px;" placeholder="Ödenen ¥" value="${purchaseRec.paidJPY || ''}" onchange="updateShopPaid('${item.id}', this.value)">
+                    <button class="action-chip ${syncedSame ? 'map-place' : 'map-route'}" onclick="logShopItemToBudget('${item.id}')">
+                      ${ico('card')} <span>${syncedSame ? 'Bütçede İşli ✓' : (shopExp ? 'Bütçeyi Güncelle' : 'Bütçeye İşle')}</span>
+                    </button>
+                  `;
+                })() : ''}
               </div>
 
               <div style="display:flex; gap:8px;">
@@ -1843,6 +1854,24 @@ function updateShopPaid(id, val) {
   appState.shopPurchased[id] = { bought: true, paidJPY: Number(val) || 0 };
   saveMasterState();
   renderShopping();
+}
+function logShopItemToBudget(itemId) {
+  const rec = appState.shopPurchased && appState.shopPurchased[itemId];
+  if (!rec || !rec.bought) {
+    showToast('Önce ürünü "Aldık" olarak işaretleyin');
+    return;
+  }
+  const paid = Number(rec.paidJPY) || 0;
+  if (paid <= 0) {
+    showToast('Bütçeye işlemek için önce ödenen ¥ tutarını girin');
+    return;
+  }
+  const item = (shoppingData || []).find(s => s.id === itemId);
+  const title = item ? `Alışveriş: ${item.title}` : `Alışveriş (${itemId})`;
+  logDayAmountToBudget(title, 'Alışveriş & Teknoloji & Saat (Hediyelik Dahil)', paid, {
+    entryType: 'actual',
+    sourceKey: `shop-${itemId}`
+  });
 }
 function switchShopSubtab(sub) { currentShopSubtab = sub; renderShopping(); }
 function toggleShoppingDrawer(id) { openShoppingCards[id] = !openShoppingCards[id]; renderShopping(); }
@@ -2347,7 +2376,7 @@ function renderGuide() {
         <div class="editorial-card" style="border-left:4px solid var(--sky);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
             <div>
-              <span class="section-eyebrow" style="color:var(--sky);">Codex Colab • Resmî İşlemler &amp; Bilet Pencereleri</span>
+              <span class="section-eyebrow" style="color:var(--sky);">Resmî İşlemler &amp; Bilet Pencereleri</span>
               <h3 style="font-size:1.08rem; font-weight:800;">Rezervasyon &amp; Ön Hazırlık Takibi</h3>
             </div>
             <span class="halal-verify-badge tabular">${prepDone}/${bookingsPrepData.length} Tamam</span>
@@ -2678,7 +2707,33 @@ function openWalletModal() {
     </div>
   `).join('');
 
+  const flightExitHtml = `
+    <div class="flight-exit-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+        <span class="hero-badge" style="background:var(--gold); color:#111827;">UÇUŞ &amp; HANEDA T3 ÇIKIŞ ÖZETİ</span>
+        <span class="tabular" style="font-size:0.75rem; color:#cbd5e1; font-weight:700;">21 Kas – 12 Ara 2026</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px; font-size:0.8rem;">
+        <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
+          <strong style="color:#fbbf24;">Varış: QR812 (Qatar Airways)</strong><br>
+          21 Kas 22:55 Haneda Terminal 3 → Visit Japan Web QR → 1F Group Bus Stop <strong>00:40 / 01:40</strong> Heiwajima Onsen ücretsiz servisi.
+        </div>
+        <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
+          <strong style="color:#86efac;">Dönüş: TG683 • 12 Ara 10:35</strong><br>
+          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 kalkış 07:35 hedef.
+        </div>
+      </div>
+      <div class="flight-exit-steps">
+        <div class="flight-exit-step"><strong>1. Adım (Check-in Öncesi):</strong> Tax-Free Kiosk / gümrük noktasına pasaportu okut (lüks alışverişler kabin çantasında; kozmetik/gıda sarf check-in valizde).</div>
+        <div class="flight-exit-step"><strong>2. Adım (Valiz &amp; Kahvaltı):</strong> Check-in bagajı teslim et → Güvenlik <strong>ÖNCESİ</strong> T3 4F Edo Koji <strong>Honolu Premier Air</strong> kahvaltısı.</div>
+        <div class="flight-exit-step"><strong>3. Adım (Pasaport &amp; Duty Free):</strong> Güvenlik geçişi + yüz tanıma çıkış kapısı. Sıvı/krem sınırına dikkat.</div>
+        <div class="flight-exit-step"><strong>4. Adım (Kapı):</strong> 09:50 kapıda hazır ol • 10:35 TG683 kalkış.</div>
+      </div>
+    </div>
+  `;
+
   body.innerHTML = `
+    ${flightExitHtml}
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
       <h3 style="font-size:0.96rem; font-weight:800; color:var(--shinkansen);">Alınmış Tren Biletlerimiz (4 Sefer)</h3>
       <button class="action-chip map-route" onclick="downloadTripICS()">${ico('calendar')} <span>.ics Ekle</span></button>
@@ -2751,10 +2806,17 @@ function openSyncModal() {
     </div>
 
     <div class="editorial-card">
-      <h4 style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">2. Satır İçi Yedek Kodu Dışa / İçe Aktar</h4>
+      <h4 style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">2. Yedek Dosyası (.json) &amp; Satır İçi Kod Aktarımı</h4>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        <button class="action-chip map-place" onclick="downloadBackupFile()" style="flex:1; justify-content:center;">${ico('calendar')} <span>.json Dosya İndir</span></button>
+        <label class="action-chip map-route" style="flex:1; justify-content:center; cursor:pointer; margin:0;">
+          <span>.json Dosyadan Önizle</span>
+          <input type="file" accept=".json,application/json" style="display:none;" onchange="handleBackupFileSelect(this)">
+        </label>
+      </div>
       <textarea id="sync-code-area" class="radar-textarea" placeholder="Dışa aktar dediğinizde kod buraya çıkar; eşinizden gelen kodu buraya yapıştırıp Önizle / Yükle'ye basın."></textarea>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="action-chip map-place" onclick="exportStateInline()" style="flex:1; justify-content:center;">Kodu Üret &amp; Kopyala</button>
+        <button class="action-chip" onclick="exportStateInline()" style="flex:1; justify-content:center;">Kodu Üret &amp; Kopyala</button>
         <button class="action-chip map-route" onclick="previewImportStateInline()" style="flex:1; justify-content:center;">Kodu Önizle &amp; Birleştir</button>
       </div>
       <div id="sync-preview-container"></div>
@@ -2792,6 +2854,34 @@ function exportStateInline() {
   const area = document.getElementById('sync-code-area');
   if (area) area.value = jsonStr;
   copyTextQuick(jsonStr, 'Veri kodu üretildi ve kopyalandı');
+}
+
+function downloadBackupFile() {
+  const payload = JSON.stringify(appState, null, 2);
+  const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `japonya-2026-yedek-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('JSON yedek dosyası indirildi');
+}
+
+function handleBackupFileSelect(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const area = document.getElementById('sync-code-area');
+    if (area) area.value = String(reader.result || '');
+    if (typeof previewImportStateInline === 'function') previewImportStateInline();
+    if (input) input.value = '';
+  };
+  reader.onerror = () => showToast('Dosya okunamadı');
+  reader.readAsText(file, 'utf-8');
 }
 
 function cloneAppStateSnapshot() {
@@ -3127,6 +3217,87 @@ function setupEventListeners() {
   }
 }
 
+function clearGlobalSearch() {
+  const searchInput = document.getElementById('global-search');
+  const clearBtn = document.getElementById('search-clear-btn');
+  if (searchInput) searchInput.value = '';
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderDay(currentDayIndex);
+}
+
+function jumpToTodayTripDay() {
+  const now = new Date();
+  const iso = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const exactIdx = itineraryData.findIndex(d => d.date === iso);
+  const targetIdx = exactIdx >= 0 ? exactIdx : 0;
+  closeOverviewModal();
+  switchTab('itinerary');
+  selectDay(targetIdx);
+  showToast(exactIdx >= 0 ? `Bugünün planı açıldı (${itineraryData[exactIdx].date})` : 'Gezi henüz başlamadı — 1. Gün (21 Kasım) açıldı');
+}
+
+function openOverviewModal() {
+  const modal = document.getElementById('overview-modal');
+  const body = document.getElementById('overview-modal-body');
+  if (!modal || !body) return;
+
+  let totalStops = 0;
+  let completedStops = 0;
+  itineraryData.forEach((day) => {
+    (day.stops || []).forEach((s) => {
+      totalStops++;
+      if (appState.visitedStops && appState.visitedStops[s.stopId]) completedStops++;
+    });
+  });
+
+  const cardsHtml = itineraryData.map((day, idx) => {
+    const stops = day.stops || [];
+    const done = stops.filter(s => appState.visitedStops && appState.visitedStops[s.stopId]).length;
+    const pct = stops.length ? Math.round((done / stops.length) * 100) : 0;
+    const isCurrent = idx === currentDayIndex;
+    const booked = typeof bookedTrainAlerts !== 'undefined' && bookedTrainAlerts[idx];
+    const hasNotes = !!(appState.dailyNotes && appState.dailyNotes[day.id]);
+    const dayMode = (appState.dayModes && appState.dayModes[day.id]) || {};
+    const modeTag = dayMode.rain ? 'Yağmur' : dayMode.lighten ? 'Hafif' : '';
+    return `
+      <button class="overview-day-card ${isCurrent ? 'is-current' : ''}" onclick="closeOverviewModal(); selectDay(${idx});">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; width:100%;">
+          <span class="tabular" style="font-size:0.72rem; font-weight:800; color:var(--vermilion);">GÜN ${idx + 1} • ${day.date.slice(5)} (${formatWeekdayLabel(day.date).slice(0, 3)})</span>
+          <span class="tabular" style="font-size:0.71rem; font-weight:700; color:${done === stops.length && stops.length > 0 ? 'var(--matcha)' : 'var(--text-muted)'};">${done}/${stops.length}</span>
+        </div>
+        <div style="font-size:0.89rem; font-weight:800; color:var(--text-main); line-height:1.25;">${day.city} — ${day.title}</div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
+          ${booked ? `<span class="stop-cat-tag" style="background:rgba(99,41,209,0.12); color:var(--shinkansen); font-size:0.65rem;">Biletli Tren</span>` : ''}
+          ${modeTag ? `<span class="stop-cat-tag" style="font-size:0.65rem;">${modeTag}</span>` : ''}
+          ${hasNotes ? `<span class="stop-cat-tag" style="background:var(--gold-soft); color:var(--gold); font-size:0.65rem;">Notlu</span>` : ''}
+        </div>
+        <div class="overview-progress-bar">
+          <div class="overview-progress-fill" style="width:${pct}%;"></div>
+        </div>
+      </button>
+    `;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="overview-summary-strip">
+      <div>
+        <div style="font-size:0.88rem; font-weight:800; color:var(--text-main);">22 Gün • ${completedStops}/${totalStops} Durak Tamamlandı</div>
+        <div style="font-size:0.75rem; color:var(--text-secondary);">Tokyo → Fuji → Takayama → Shirakawa-go → Kanazawa → Osaka → Kyoto → Tokyo</div>
+      </div>
+      <button class="action-chip map-route" onclick="jumpToTodayTripDay()">${ico('calendar')} <span>Bugüne Atla</span></button>
+    </div>
+    <div class="overview-grid">
+      ${cardsHtml}
+    </div>
+  `;
+  modal.classList.add('open');
+}
+
+function closeOverviewModal() {
+  const m = document.getElementById('overview-modal');
+  if (m) m.classList.remove('open');
+}
+
 function switchTab(tabId) {
   if (typeof document !== 'undefined') {
     document.body.classList.remove('tab-itinerary', 'tab-halal', 'tab-shopping', 'tab-budget', 'tab-guide');
@@ -3139,6 +3310,8 @@ function switchTab(tabId) {
 
 function handleSearch(term) {
   const q = (term || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('search-clear-btn');
+  if (clearBtn) clearBtn.style.display = q ? 'inline-flex' : 'none';
   if (!q) { renderDay(currentDayIndex); return; }
 
   const stopResults = [];
@@ -3158,23 +3331,29 @@ function handleSearch(term) {
 
   const shopResults = (shoppingData || []).filter(s => `${s.title} ${s.category} ${(s.citiesAndShops || []).join(' ')}`.toLowerCase().includes(q));
   const tipResults = (proTipsData || []).filter(t => `${t.title} ${t.desc} ${t.category}`.toLowerCase().includes(q));
+  const basketResults = (marketBasketsData || []).filter(b => `${b.title} ${b.when} ${b.where} ${(b.items || []).join(' ')}`.toLowerCase().includes(q));
+  const prepResults = (bookingsPrepData || []).filter(p => `${p.title} ${p.action} ${p.note} ${p.date}`.toLowerCase().includes(q));
+  const accResults = (accommodationsData || []).filter(a => `${a.name} ${a.city} ${a.addressEn} ${a.station} ${a.notes}`.toLowerCase().includes(q));
 
   const container = document.getElementById('day-container');
   if (!container) return;
 
-  const totalHits = stopResults.length + mealResults.length + shopResults.length + tipResults.length;
+  const totalHits = stopResults.length + mealResults.length + shopResults.length + tipResults.length + basketResults.length + prepResults.length + accResults.length;
   if (totalHits === 0) {
-    container.innerHTML = `<div class="editorial-card" style="text-align:center; color:var(--text-muted);">"${escapeHtml(q)}" ile eşleşen durak, restoran veya ürün bulunamadı.</div>`;
+    container.innerHTML = `<div class="editorial-card" style="text-align:center; color:var(--text-muted);">"${escapeHtml(q)}" ile eşleşen durak, restoran, market veya hazırlık kalemi bulunamadı.</div>`;
     return;
   }
 
   container.innerHTML = `
-    <div style="font-size:0.84rem; font-weight:700; color:var(--text-muted); margin-bottom:12px;">
-      "${escapeHtml(q)}" için ${totalHits} sonuç (Durak: ${stopResults.length}, Restoran: ${mealResults.length}, Alışveriş: ${shopResults.length}, İpucu: ${tipResults.length})
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <div style="font-size:0.84rem; font-weight:700; color:var(--text-muted);">
+        "${escapeHtml(q)}" için ${totalHits} sonuç (Durak: ${stopResults.length}, Restoran: ${mealResults.length}, Alışveriş: ${shopResults.length}, Sepet/İpucu: ${basketResults.length + tipResults.length}, Bilet/Ev: ${prepResults.length + accResults.length})
+      </div>
+      <button class="action-chip" onclick="clearGlobalSearch()">✕ Aramayı Temizle</button>
     </div>
     <div class="grid-2col">
       ${stopResults.map(r => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="document.getElementById('global-search').value=''; selectDay(${r.dIdx});">
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
           <span class="hero-badge" style="background:var(--indigo); display:inline-block; margin-bottom:6px;">Rota • ${r.day.date} (${r.day.city})</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${r.stop.time} — ${r.stop.name}</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.stop.details}</p>
@@ -3182,7 +3361,7 @@ function handleSearch(term) {
         </div>
       `).join('')}
       ${mealResults.map(r => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--matcha);" onclick="document.getElementById('global-search').value=''; selectDay(${r.dIdx});">
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--matcha);" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
           <span class="halal-verify-badge" style="margin-bottom:6px;">Helal Restoran • ${r.day.date}</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${r.meal.name} (${r.meal.cuisine})</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.meal.recommendedOrder} • ~¥${r.meal.costPerPersonJPY}/kişi</p>
@@ -3190,15 +3369,39 @@ function handleSearch(term) {
         </div>
       `).join('')}
       ${shopResults.map(s => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--sky);" onclick="document.getElementById('global-search').value=''; switchTab('shopping');">
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--sky);" onclick="clearGlobalSearch(); switchTab('shopping');">
           <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky); margin-bottom:6px; display:inline-block;">Alışveriş • ${s.category}</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${s.title}</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${s.currentPrice}</p>
           <div style="font-size:0.78rem; font-weight:800; color:var(--sky);">Alışveriş Rehberine Git →</div>
         </div>
       `).join('')}
+      ${basketResults.map(b => `
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--matcha);" onclick="clearGlobalSearch(); switchTab('halal'); switchHalalSubtab('etiquette');">
+          <span class="stop-cat-tag" style="background:var(--matcha-soft); color:var(--matcha); margin-bottom:6px; display:inline-block;">Market Sepeti • ${b.when}</span>
+          <h3 style="font-size:0.97rem; font-weight:800;">${b.title}</h3>
+          <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${b.where}</p>
+          <div style="font-size:0.78rem; font-weight:800; color:var(--matcha);">Yemek &amp; Market Sekmesine Git →</div>
+        </div>
+      `).join('')}
+      ${prepResults.map(p => `
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--sky);" onclick="clearGlobalSearch(); switchTab('guide'); switchGuideSubtab('checklist');">
+          <span class="stop-cat-tag" style="margin-bottom:6px; display:inline-block;">Hazırlık • ${p.date}</span>
+          <h3 style="font-size:0.97rem; font-weight:800;">${p.title}</h3>
+          <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${p.action}</p>
+          <div style="font-size:0.78rem; font-weight:800; color:var(--sky);">Rehber Hazırlığına Git →</div>
+        </div>
+      `).join('')}
+      ${accResults.map(a => `
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--indigo);" onclick="clearGlobalSearch(); openWalletModal();">
+          <span class="stop-cat-tag" style="background:rgba(40,88,132,0.12); color:var(--indigo); margin-bottom:6px; display:inline-block;">Konaklama • ${a.dates}</span>
+          <h3 style="font-size:0.97rem; font-weight:800;">${a.name}</h3>
+          <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${a.addressEn} • ${a.station}</p>
+          <div style="font-size:0.78rem; font-weight:800; color:var(--indigo);">Cüzdanım'da Aç →</div>
+        </div>
+      `).join('')}
       ${tipResults.map(t => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="document.getElementById('global-search').value=''; switchTab('guide'); switchGuideSubtab('tips');">
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="clearGlobalSearch(); switchTab('guide'); switchGuideSubtab('tips');">
           <span class="stop-cat-tag" style="margin-bottom:6px; display:inline-block;">Saha Sırrı • ${t.category}</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${t.title}</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${t.desc}</p>
