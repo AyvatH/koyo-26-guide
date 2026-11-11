@@ -1,10 +1,11 @@
-const CACHE_NAME = 'japonya-2026-koyo-v6-enc';
+const CACHE_NAME = 'japonya-2026-koyo-v7-enc';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/data_encrypted.js',
   './js/vault.js',
+  './js/day_planner.js',
   './js/app.js',
   './manifest.json',
   './icons/icon-192.png',

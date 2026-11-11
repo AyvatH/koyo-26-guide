@@ -207,6 +207,21 @@
     </div>
   </div>
 
+  <!-- MODAL 5: GÜNÜ ESNET & GECİKME MOTORU -->
+  <div class="modal-overlay" id="planner-modal" onclick="if(event.target===this)closePlannerModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow" style="color:var(--vermilion);">Akıllı Rota Esnetme Motoru</span>
+          <h2 class="modal-title">Geciktik &amp; Günü Hafiflet</h2>
+        </div>
+        <button class="hdr-btn" onclick="closePlannerModal()">Kapat</button>
+      </div>
+      <div id="planner-modal-body"></div>
+    </div>
+  </div>
+
   <!-- TOAST BİLDİRİM ALANI -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
@@ -236,6 +251,7 @@
 
   <script>window.VAULT_LOCKED_MODE = true;</script>
   <script src="js/data_encrypted.js"></script>
+  <script src="js/day_planner.js"></script>
   <script src="js/app.js"></script>
   <script src="js/vault.js"></script>
 </body>

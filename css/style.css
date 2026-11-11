@@ -1955,3 +1955,127 @@ body.dark-mode .tl-marker {
     break-inside: avoid;
   }
 }
+
+/* === v7 MASTER COLAB ADDITIONS (Planner Overlay, OSM Map, Quote Compare, Advisor Desk) === */
+
+.planner-active-bar {
+  background: linear-gradient(135deg, rgba(197, 48, 39, 0.1), rgba(180, 83, 9, 0.08));
+  border: 1px solid rgba(197, 48, 39, 0.32);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planner-delay-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.planner-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.82rem;
+}
+
+.planner-row.is-skipped {
+  opacity: 0.52;
+  text-decoration: line-through;
+}
+
+.planner-row.is-moved strong.planner-new-time {
+  color: var(--vermilion);
+}
+
+.planner-row.is-locked {
+  background: var(--gold-soft);
+  border-radius: var(--radius-sm);
+}
+
+.planner-conflict-box {
+  background: var(--vermilion-soft);
+  border-left: 4px solid var(--vermilion);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.osm-map-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 14px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.osm-map-frame {
+  width: 100%;
+  height: 290px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card-tint);
+  border: 1px solid var(--border-subtle);
+  z-index: 1;
+}
+
+.advisor-desk-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 720px) {
+  .advisor-desk-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.advisor-mini-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prep-booking-card {
+  background: var(--card-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.prep-booking-card.done {
+  border-color: rgba(21, 128, 61, 0.35);
+  opacity: 0.82;
+}
+
+.time-shifted-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--vermilion);
+  background: var(--vermilion-soft);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+}

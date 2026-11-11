@@ -10,6 +10,11 @@ let proTipsData = [];
 let cityHubsData = [];
 let accommodationsData = [];
 let bookedTicketsData = [];
+let bookingsPrepData = [];
+let marketBasketsData = [];
+let coordsData = {};
+let osmPanelOpen = false;
+let plannerDraft = { mode: 'delay', delay: 30, skip: null };
 
 let currentDayIndex = 0;
 let allDrawersExpanded = false;
@@ -28,12 +33,17 @@ let noteAutoSaveTimer = null;
 let appState = {
   completedStops: {},
   dayModes: {},
+  dayPlans: {},
   selectedMeals: {},
   checklist: {},
+  prepBookings: {},
   marketBasket: {},
+  basketChecks: {},
   shopInspections: {},
   shopPurchased: {},
+  storeQuotes: {},
   icBalances: { hasan: 3000, es: 3000, cashJPY: 35000 },
+  fxRate: 150,
   notes: {},
   expenses: [],
   darkMode: false,
@@ -88,6 +98,9 @@ function initApp() {
       accommodationsData = EMBEDDED_ACCOMMODATIONS || [];
       bookedTicketsData = EMBEDDED_BOOKED_TICKETS || [];
     }
+    if (typeof EMBEDDED_BOOKINGS_PREP !== 'undefined') bookingsPrepData = EMBEDDED_BOOKINGS_PREP || [];
+    if (typeof EMBEDDED_BASKETS !== 'undefined') marketBasketsData = EMBEDDED_BASKETS || [];
+    if (typeof EMBEDDED_COORDS !== 'undefined') coordsData = EMBEDDED_COORDS || {};
 
     loadMasterState();
     checkUrlSyncHash();
@@ -133,10 +146,20 @@ function loadMasterState() {
       appState = Object.assign(appState, parsed);
       if (!appState.shopInspections) appState.shopInspections = {};
       if (!appState.shopPurchased) appState.shopPurchased = {};
+      if (!appState.dayPlans) appState.dayPlans = {};
+      if (!appState.prepBookings) appState.prepBookings = {};
+      if (!appState.basketChecks) appState.basketChecks = {};
+      if (!appState.storeQuotes) appState.storeQuotes = {};
+      if (!appState.fxRate || appState.fxRate < 80 || appState.fxRate > 250) appState.fxRate = 150;
       if (!appState.icBalances) appState.icBalances = { hasan: 3000, es: 3000, cashJPY: 35000 };
       if (!appState.mapProvider) appState.mapProvider = 'google';
     }
   } catch (e) {}
+}
+
+function getFxRate() {
+  const r = Number(appState.fxRate);
+  return Number.isFinite(r) && r >= 80 && r <= 250 ? r : 150;
 }
 
 function saveMasterState() {
@@ -477,6 +500,12 @@ function renderDay(index) {
   if (!container || !day) return;
 
   const dModes = appState.dayModes[day.id] || { lighten: false, rain: false };
+  const activePlanRec = appState.dayPlans ? appState.dayPlans[day.id] : null;
+  const activePlan = activePlanRec && activePlanRec.current ? activePlanRec.current : null;
+  const displayStops = (typeof koyoPlanner !== 'undefined')
+    ? koyoPlanner.overlay(day, activePlan, appState.completedStops)
+    : day.stops.map((s, idx) => ({ ...s, origIndex: idx, sid: s.stopId || `${day.id}-s${idx}`, originalTime: s.time, plannerChanged: false }));
+
   const mealChoice = appState.selectedMeals[day.id] || { lunchIdx: 0, dinnerIdx: 0 };
 
   const lunchOptions = day.lunchOptions || [];
@@ -490,11 +519,14 @@ function renderDay(index) {
 
   day.stops.forEach((s, idx) => {
     const sid = s.stopId || `${day.id}-s${idx}`;
-    if (appState.completedStops[sid]) {
-      completedCount++;
-    } else if (!nextStop && !(dModes.lighten && s.isOptionalDrop)) {
+    if (appState.completedStops[sid]) completedCount++;
+  });
+
+  displayStops.forEach((s) => {
+    const sid = s.sid || s.stopId || `${day.id}-s${s.origIndex}`;
+    if (!appState.completedStops[sid] && !nextStop && !(dModes.lighten && s.isOptionalDrop)) {
       nextStop = s;
-      nextStopIdx = idx;
+      nextStopIdx = s.origIndex;
     }
   });
 
@@ -505,8 +537,9 @@ function renderDay(index) {
   const ringOffset = (ringCircumference * (1 - progressRatio)).toFixed(1);
 
   // Short Flow Chips
-  const shortFlowHtml = day.stops.map((s, idx) => {
-    const sid = s.stopId || `${day.id}-s${idx}`;
+  const shortFlowHtml = displayStops.map((s) => {
+    const idx = s.origIndex;
+    const sid = s.sid || s.stopId || `${day.id}-s${idx}`;
     const isDone = !!appState.completedStops[sid];
     const isBooked = s.category === 'booked_train';
     const isDropped = dModes.lighten && s.isOptionalDrop;
@@ -565,9 +598,28 @@ function renderDay(index) {
     `;
   }
 
-  // Filtered Timeline Stops
-  const filteredStops = day.stops.map((stop, sIdx) => ({ stop, sIdx })).filter(({ stop, sIdx }) => {
-    const sid = stop.stopId || `${day.id}-s${sIdx}`;
+  if (activePlan) {
+    const hasUndo = Object.prototype.hasOwnProperty.call(activePlanRec, 'previous');
+    const shiftedCount = Object.keys(activePlan.times || {}).length;
+    const skippedCount = (activePlan.skip || []).length;
+    modeAlertsHtml += `
+      <div class="planner-active-bar">
+        <div>
+          <strong style="color:var(--vermilion); display:block; font-size:0.86rem;">Alternatif Plan Aktif (+${activePlan.delay || 0} dk kaydırma • ${shiftedCount} durak güncellendi${skippedCount ? ' • ' + skippedCount + ' durak çıkarıldı' : ''})</strong>
+          <span style="font-size:0.75rem; color:var(--text-secondary);">Alınmış bilet saatleri ve durak tamamlama işaretleri korunuyor.</span>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="action-chip" onclick="openPlannerModal('${activePlan.mode || 'delay'}')">Düzenle</button>
+          ${hasUndo ? `<button class="action-chip" onclick="undoDayPlan('${day.id}')">Son Değişikliği Geri Al</button>` : ''}
+          <button class="action-chip map-route" onclick="resetDayPlan('${day.id}')">Ana Plana Dön</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Filtered Timeline Stops (retaining original stop index & completion keys)
+  const filteredStops = displayStops.map((stop) => ({ stop, sIdx: stop.origIndex })).filter(({ stop, sIdx }) => {
+    const sid = stop.sid || stop.stopId || `${day.id}-s${sIdx}`;
     if (currentTimelineFilter === 'todo') return !appState.completedStops[sid];
     if (currentTimelineFilter === 'booked') return stop.category === 'booked_train';
     return true;
@@ -576,7 +628,7 @@ function renderDay(index) {
   const timelineHtml = filteredStops.length === 0
     ? `<div class="editorial-card" style="text-align:center; color:var(--text-muted); font-size:0.86rem;">Bu filtrede gösterilecek durak kalmadı.</div>`
     : filteredStops.map(({ stop, sIdx }) => {
-        const sid = stop.stopId || `${day.id}-s${sIdx}`;
+        const sid = stop.sid || stop.stopId || `${day.id}-s${sIdx}`;
         const isDone = !!appState.completedStops[sid];
         const isBooked = stop.category === 'booked_train';
         const isDropped = dModes.lighten && stop.isOptionalDrop;
@@ -601,7 +653,7 @@ function renderDay(index) {
             <div class="tl-marker"></div>
             <div class="stop-card-v3 ${isOpen ? 'open' : ''}" id="card-${sid}">
               <div class="stop-top-bar">
-                <span class="stop-time-pill">${isBooked ? ico('train') : ico('clock')} <span>${stop.time}</span></span>
+                <span class="stop-time-pill">${isBooked ? ico('train') : ico('clock')} <span>${stop.time}</span>${stop.plannerChanged ? `<span class="time-shifted-badge">Özgün: ${stop.originalTime}</span>` : ''}</span>
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
                   ${stop.isOptionalDrop ? '<span class="stop-cat-tag" style="background:var(--gold-soft); color:var(--gold);">ESNEK</span>' : ''}
                   <span class="stop-cat-tag">${stop.badgeText || 'DURAK'}</span>
@@ -710,6 +762,9 @@ function renderDay(index) {
           </div>
 
           <div class="day-mode-bar">
+            <button class="mode-toggle-btn ${activePlan ? 'active' : ''}" onclick="openPlannerModal('delay')">
+              ${ico('clock')} <span>Geciktik / Esnet</span>
+            </button>
             <button class="mode-toggle-btn ${dModes.lighten ? 'active' : ''}" onclick="toggleDayMode('${day.id}', 'lighten')">
               ${ico('feather')} <span>Hafiflet</span>
             </button>
@@ -792,6 +847,9 @@ function renderDay(index) {
               <a href="${fullDayMapUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-route" style="min-height:34px; padding:4px 10px;">
                 ${ico('route')} <span>Tüm Günü Haritada Gör</span>
               </a>
+              <button class="action-chip ${osmPanelOpen ? 'map-place' : ''}" onclick="toggleDayOsmMap(${index})" style="min-height:34px; padding:4px 10px;">
+                ${ico('pin')} <span>${osmPanelOpen ? 'Haritayı Gizle' : 'Canlı Harita (OSM)'}</span>
+              </button>
             </div>
             <div class="pill-filter-row" style="margin-bottom:0;">
               <button class="filter-pill-btn ${currentTimelineFilter === 'all' ? 'active' : ''}" onclick="setTimelineFilter('all')">Tümü</button>
@@ -799,6 +857,7 @@ function renderDay(index) {
               <button class="filter-pill-btn ${currentTimelineFilter === 'booked' ? 'active' : ''}" onclick="setTimelineFilter('booked')">Alınmış Bilet</button>
             </div>
           </div>
+          ${osmPanelOpen ? renderOsmMapBoxHtml(day, displayStops) : ''}
           <div class="timeline-wrapper">${timelineHtml}</div>
         </div>
 
@@ -851,6 +910,9 @@ function renderDay(index) {
       </div>
     </div>
   `;
+  if (osmPanelOpen) {
+    mountLeafletMapForDay(day, displayStops);
+  }
 }
 
 function renderMealOptionBlock(dayId, mealType, titleLabel, options, activeIdx) {
@@ -1054,6 +1116,41 @@ function renderHalal() {
           `;
         }).join('')}
       </div>
+
+      ${marketBasketsData && marketBasketsData.length ? `
+        <div class="editorial-card" style="margin-top:16px; border-left:4px solid var(--sky);">
+          <span class="section-eyebrow" style="color:var(--sky);">Codex Colab • Günlük Hazır Alışveriş Listeleri</span>
+          <h3 style="font-size:1.06rem; font-weight:800; margin-bottom:4px;">Şehre Göre Market &amp; Tren Kumanyası Sepetleri (7 Liste)</h3>
+          <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Fuji günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
+          <div class="grid-2col">
+            ${marketBasketsData.map((b, bIdx) => `
+              <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-lg); padding:13px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;">
+                  <strong style="font-size:0.93rem; color:var(--text-main);">${b.title}</strong>
+                  <span class="price-verify-badge">${b.yen.split(';')[0]}</span>
+                </div>
+                <div style="font-size:0.75rem; font-weight:700; color:var(--sky); margin-bottom:4px;">${b.when}</div>
+                <p style="font-size:0.77rem; color:var(--text-secondary); margin-bottom:8px;">${b.where}</p>
+                ${(b.items || []).map((line, iIdx) => {
+                  const key = `cb-${bIdx}-${iIdx}`;
+                  const chk = !!(appState.basketChecks && appState.basketChecks[key]);
+                  return `
+                    <label class="touch-check-row" for="${key}" style="min-height:36px; padding:4px 0; font-size:0.79rem;">
+                      <input type="checkbox" id="${key}" ${chk ? 'checked' : ''} onchange="toggleColabBasketItem('${key}')" style="accent-color:var(--matcha);">
+                      <span style="${chk ? 'text-decoration:line-through; opacity:0.55;' : ''}">${line}</span>
+                    </label>
+                  `;
+                }).join('')}
+                <div style="margin-top:8px; font-size:0.73rem; color:var(--text-muted);">${b.check}</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                  <a href="${buildPlaceUrl(b.query)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Marketi Aç</span></a>
+                  ${b.source ? `<a href="${escapeAttr(b.source)}" target="_blank" rel="noopener noreferrer" class="action-chip">Resmî Kaynak ↗</a>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
     `;
   } else if (currentHalalSubtab === 'phrases') {
     bodyHtml = `
@@ -1171,6 +1268,12 @@ function renderHalal() {
 
 function switchHalalSubtab(subId) { currentHalalSubtab = subId; renderHalal(); }
 function toggleMarketItem(id) { appState.marketBasket[id] = !appState.marketBasket[id]; saveMasterState(); renderHalal(); }
+function toggleColabBasketItem(key) {
+  if (!appState.basketChecks) appState.basketChecks = {};
+  appState.basketChecks[key] = !appState.basketChecks[key];
+  saveMasterState();
+  renderHalal();
+}
 function testRadarSample(txt) {
   const el = document.getElementById('radar-input');
   if (el) { el.value = txt; runLabelRadar(txt); }
@@ -1322,6 +1425,26 @@ function renderShopping() {
         </div>
 
         <div style="display:flex; flex-direction:column; gap:14px;">
+          <div class="editorial-card" style="border-left:4px solid var(--matcha); margin-bottom:0;">
+            <span class="section-eyebrow" style="color:var(--matcha);">Codex Colab • Mağaza A vs B Teklif Kıyaslayıcı</span>
+            <h3 style="font-size:1.02rem; font-weight:800; margin-bottom:4px;">İki Mağaza Fiyatını Bütçeyle Kıyasla</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">
+              Aynı model ve aynı kutu içeriği için iki mağazadan aldığınız vergi dahil ¥ fiyatlarını girin; kalan USD tavanına göre en kârlı seçeneği görün.
+            </p>
+            <select id="cmp-cat" class="search-input" style="padding:8px 12px; margin-bottom:8px;" onchange="recalcStoreCompare()">
+              <option value="fujifilm">Kamera / Fujifilm (Tavan $1,200)</option>
+              <option value="watch">Saat Alışverişi (KESİN Tavan $1,500)</option>
+              <option value="ps5">PS5 &amp; Oyun (Tavan $550)</option>
+              <option value="clothing">Vintage Giyim (Tavan $700)</option>
+              <option value="luggage">Valiz &amp; Hediyelik (Tavan $950)</option>
+            </select>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <input type="number" id="cmp-a" class="search-input tabular" style="padding:8px 10px;" placeholder="Mağaza A (¥)" oninput="recalcStoreCompare()">
+              <input type="number" id="cmp-b" class="search-input tabular" style="padding:8px 10px;" placeholder="Mağaza B (¥)" oninput="recalcStoreCompare()">
+            </div>
+            <div id="cmp-result" style="margin-top:8px;"></div>
+          </div>
+
           <div class="editorial-card" style="border-left:4px solid var(--vermilion); margin-bottom:0;">
             <h3 style="font-size:0.98rem; font-weight:800; color:var(--vermilion); margin-bottom:6px;">Kritik Kural: İade Kasada Düşülmez</h3>
             <p style="font-size:0.83rem; color:var(--text-secondary);">
@@ -1336,6 +1459,7 @@ function renderShopping() {
       </div>
     `;
     recalcKasaHakemi();
+    loadStoreCompareInputs();
     return;
   }
 
@@ -1710,7 +1834,13 @@ function renderBudget() {
         </div>
 
         <div class="editorial-card">
-          <h3 style="font-size:0.96rem; font-weight:800; margin-bottom:8px;">Hızlı Kur Çevirici (1$ = 150¥)</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <h3 style="font-size:0.96rem; font-weight:800;">Hızlı Kur Çevirici (<span class="tabular">1$ = ${getFxRate()}¥</span>)</h3>
+            <label style="font-size:0.72rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:5px;">
+              Planlama Kuru (¥):
+              <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${getFxRate()}" class="search-input tabular" style="width:74px; min-height:34px; padding:3px 8px;" onchange="updatePlanningFxRate(this.value)">
+            </label>
+          </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
             <div>
               <label style="font-size:0.7rem; font-weight:800; color:var(--text-muted);">JAPON YENİ (¥)</label>
@@ -1778,17 +1908,31 @@ function quickAddPreset(title, category, amountJPY) {
   showToast(`+${title} (¥${amountJPY.toLocaleString()}) eklendi`);
 }
 
+function updatePlanningFxRate(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num) || num < 80 || num > 250) {
+    showToast('Planlama kuru 80–250 ¥ aralığında olmalı');
+    return;
+  }
+  appState.fxRate = Math.round(num * 10) / 10;
+  saveMasterState();
+  renderBudget();
+  loadStoreCompareInputs();
+  showToast(`Planlama kuru $1 = ¥${appState.fxRate} olarak güncellendi`);
+}
+
 function convertFromJPY(val) {
   const jpy = parseFloat(val);
   const usdEl = document.getElementById('calc-usd');
   const hintEl = document.getElementById('calc-taxfree-hint');
   if (isNaN(jpy)) { if (usdEl) usdEl.value = ''; return; }
-  const usd = (jpy / 150).toFixed(2);
+  const fx = getFxRate();
+  const usd = (jpy / fx).toFixed(2);
   if (usdEl) usdEl.value = usd;
   const netJpy = Math.round(jpy / 1.1);
   const refundJpy = jpy - netJpy;
   if (hintEl) {
-    hintEl.innerHTML = `<span class="tabular">¥${jpy.toLocaleString()} = $${usd} USD • Tax-Free iade (~¥${refundJpy.toLocaleString()}) sonrası net: <strong>¥${netJpy.toLocaleString()} ($${(netJpy / 150).toFixed(0)})</strong></span>`;
+    hintEl.innerHTML = `<span class="tabular">¥${jpy.toLocaleString()} = $${usd} USD • Tax-Free iade (~¥${refundJpy.toLocaleString()}) sonrası net: <strong>¥${netJpy.toLocaleString()} ($${(netJpy / fx).toFixed(0)})</strong></span>`;
   }
 }
 
@@ -1797,9 +1941,10 @@ function convertFromUSD(val) {
   const jpyEl = document.getElementById('calc-jpy');
   const hintEl = document.getElementById('calc-taxfree-hint');
   if (isNaN(usd)) { if (jpyEl) jpyEl.value = ''; return; }
-  const jpy = Math.round(usd * 150);
+  const fx = getFxRate();
+  const jpy = Math.round(usd * fx);
   if (jpyEl) jpyEl.value = jpy;
-  if (hintEl) hintEl.innerHTML = `<span class="tabular">$${usd} USD = <strong>¥${jpy.toLocaleString()} JPY</strong> (Kur: 1$ = 150¥)</span>`;
+  if (hintEl) hintEl.innerHTML = `<span class="tabular">$${usd} USD = <strong>¥${jpy.toLocaleString()} JPY</strong> (Kur: 1$ = ${fx}¥)</span>`;
 }
 
 function addExpense() {
@@ -1870,8 +2015,48 @@ function renderGuide() {
   } else if (currentGuideSubtab === 'checklist') {
     const doneCount = checklistData.filter(i => appState.checklist[i.id]).length;
     const pct = checklistData.length ? Math.round((doneCount / checklistData.length) * 100) : 0;
+    const prepDone = bookingsPrepData.filter(b => appState.prepBookings && appState.prepBookings[b.id]).length;
     container.innerHTML = `
       ${headerHtml}
+      ${buildAdvisorDeskHtml(currentDayIndex)}
+
+      ${bookingsPrepData.length ? `
+        <div class="editorial-card" style="border-left:4px solid var(--sky);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px; flex-wrap:wrap;">
+            <div>
+              <span class="section-eyebrow" style="color:var(--sky);">Codex Colab • Resmî İşlemler &amp; Bilet Pencereleri</span>
+              <h3 style="font-size:1.08rem; font-weight:800;">Rezervasyon &amp; Ön Hazırlık Takibi</h3>
+            </div>
+            <span class="halal-verify-badge tabular">${prepDone}/${bookingsPrepData.length} Tamam</span>
+          </div>
+          ${bookingsPrepData.map(item => {
+            const isDone = !!(appState.prepBookings && appState.prepBookings[item.id]);
+            const dayIdx = itineraryData.findIndex(d => d.date === item.date);
+            return `
+              <div class="prep-booking-card ${isDone ? 'done' : ''}">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
+                  <span class="stop-cat-tag tabular">${item.date}</span>
+                  <span class="${isDone ? 'halal-verify-badge' : 'price-verify-badge'}">${isDone ? 'Tamamlandı' : 'İşlem Bekliyor'}</span>
+                </div>
+                <strong style="font-size:0.95rem; display:block; margin-bottom:4px;">${item.title}</strong>
+                <p style="font-size:0.81rem; color:var(--text-main); margin-bottom:4px;">${item.action}</p>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">${item.note}</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <a href="${escapeAttr(item.url)}" target="_blank" rel="noopener noreferrer" class="action-chip map-route">Resmî Sayfa ↗</a>
+                    ${dayIdx >= 0 ? `<button class="action-chip" onclick="switchTab('itinerary'); selectDay(${dayIdx});">Günü Aç →</button>` : ''}
+                  </div>
+                  <label class="touch-check-row" for="prep-${item.id}" style="min-height:36px; border:none; padding:2px 0;">
+                    <input type="checkbox" id="prep-${item.id}" ${isDone ? 'checked' : ''} onchange="togglePrepBooking('${item.id}')" style="accent-color:var(--matcha);">
+                    <span style="font-size:0.8rem; font-weight:700;">Tamamlandı</span>
+                  </label>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+
       <div class="editorial-card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
           <div>
@@ -1934,24 +2119,43 @@ function switchGuideSubtab(sub) { currentGuideSubtab = sub; renderGuide(); }
 function filterProTips(cat) { currentTipCategory = cat; renderGuide(); }
 function toggleMainCheck(id) { appState.checklist[id] = !appState.checklist[id]; saveMasterState(); renderGuide(); }
 
+function foldICSLine(line) {
+  if (typeof TextEncoder === 'undefined') return line;
+  const enc = new TextEncoder();
+  let out = '';
+  let bytes = 0;
+  for (const ch of line) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > 73) {
+      out += '\r\n ';
+      bytes = 1;
+    }
+    out += ch;
+    bytes += n;
+  }
+  return out;
+}
+
 function downloadTripICS() {
   const events = [
     { uid: 'heiwajima-deadline@jp2026', start: '20261120T130000', end: '20261120T140000', summary: 'SON SAAT: Heiwajima Onsen Welcome Course Rezervasyonu', desc: 'QR812 ile 21 Kas gece giriş için online kayıt son saati 14:00 (JST).' },
+    { uid: 'qr812-arrival@jp2026', start: '20261121T225500', end: '20261121T232500', summary: 'QR812: Haneda Terminal 3 Varış (ALINMIŞ UÇUŞ)', desc: 'Pasaport, Visit Japan Web QR ve 00:40 Heiwajima servisi.' },
     { uid: 'rikugien-light@jp2026', start: '20261125T180000', end: '20261125T194500', summary: 'Rikugien Gece Işıklandırması (İlk Gece)', desc: '18:00-20:30 açılış, Komagome İstasyonu.' },
     { uid: 'nozomi379@jp2026', start: '20261127T114600', end: '20261127T140600', summary: 'Nozomi 379: Shinagawa -> Shin-Osaka (ALINMIŞ BİLET)', desc: 'En geç 11:25 te peronda olun.' },
-    { uid: 'sagano7@jp2026', start: '20261204T120200', end: '20261204T122500', summary: 'Sagano 7: Torokko Saga -> Torokko Kameoka (ALINMIŞ BİLET)', desc: '11:45 te peronda hazır olun.' },
-    { uid: 'aoniyoshi@jp2026', start: '20261207T145500', end: '20261207T152800', summary: 'Aoniyoshi: Kyoto -> Kintetsu-Nara (+Todai-ji 17:00)', desc: '¥730 ek bilet alındı; +¥760 IC kart basılacak. 15:28 sonrası önce Todai-ji ye yürüyün.' },
-    { uid: 'nozomi250@jp2026', start: '20261210T113000', end: '20261210T134300', summary: 'Nozomi 250: Kyoto -> Shinagawa (11:30/11:36 Teyit Et)', desc: 'Bilet 11:30 görünse de 2026 JR tarifesi 11:36; 11:15 te peronda olun.' },
-    { uid: 'haneda-exit@jp2026', start: '20261212T073500', end: '20261212T103500', summary: 'Haneda T3 Dönüş: Tax-Free Kiosk + Bagaj + 10:35 Uçuş', desc: 'Bagajdan ÖNCE Tax-Free Kiosk! Kahvaltı (Honolu 4F) güvenlik ÖNCESİ!' }
+    { uid: 'sagano7@jp2026', start: '20261204T120200', end: '20261204T122500', summary: 'Sagano 7: Torokko Saga -> Torokko Kameoka (ALINMIŞ BİLET)', desc: '11:45 te peronda hazır olun. Vagon 1, 7A/7B.' },
+    { uid: 'aoniyoshi@jp2026', start: '20261207T145500', end: '20261207T152800', summary: 'Aoniyoshi: Kyoto -> Kintetsu-Nara (+Todai-ji 17:00)', desc: '¥730 ek bilet alındı; +¥760 IC kart basılacak. Vagon 4, 2A/2B.' },
+    { uid: 'nozomi250@jp2026', start: '20261210T113000', end: '20261210T134300', summary: 'Nozomi 250: Kyoto -> Shinagawa (ALINMIŞ BİLET)', desc: 'Bilet 11:30 görünse de 2026 JR tarifesi 11:36; 11:15 te peronda olun.' },
+    { uid: 'haneda-exit@jp2026', start: '20261212T073500', end: '20261212T103500', summary: 'TG683 & Haneda T3 Dönüş: Tax-Free + 10:35 Kalkış', desc: 'Bagajdan ÖNCE Tax-Free Kiosk! Kahvaltı (Honolu 4F) güvenlik ÖNCESİ!' }
   ];
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Japonya Rehberi 2026//TR', 'CALSCALE:GREGORIAN', 'X-WR-TIMEZONE:Asia/Tokyo'];
   events.forEach(ev => {
     lines.push('BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:20261101T000000Z', 'DTSTART;TZID=Asia/Tokyo:' + ev.start, 'DTEND;TZID=Asia/Tokyo:' + ev.end, 'SUMMARY:' + ev.summary, 'DESCRIPTION:' + ev.desc, 'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:' + ev.summary, 'END:VALARM', 'END:VEVENT');
   });
   lines.push('END:VCALENDAR');
+  const foldedText = lines.map(foldICSLine).join('\r\n') + '\r\n';
 
   if (typeof Blob !== 'undefined' && typeof document !== 'undefined') {
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const blob = new Blob([foldedText], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1960,9 +2164,9 @@ function downloadTripICS() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('Takvim (.ics) dosyası indirildi');
+    showToast('8 kritik kayıt içeren Takvim (.ics) indirildi');
   }
-  return lines.join('\r\n');
+  return foldedText;
 }
 
 // ==========================================================================
@@ -2262,15 +2466,101 @@ function exportStateInline() {
   copyTextQuick(jsonStr, 'Veri kodu üretildi ve kopyalandı');
 }
 
+function mergePartnerState(incoming) {
+  let addedExpenses = 0;
+  let mergedItems = 0;
+
+  // Support Codex v11 japan-guide-backup-v1 format seamlessly
+  if (incoming && incoming.format === 'japan-guide-backup-v1' && incoming.records) {
+    const recTrip = incoming.records['japan-trip-v4'] || {};
+    const recPrep = incoming.records['japan-preparations-v1'] || {};
+    const recNotes = incoming.records['japan-daily-notes'] || {};
+    const recQuotes = incoming.records['japan-quotes-v1'] || {};
+
+    appState.prepBookings = appState.prepBookings || {};
+    Object.entries(recPrep).forEach(([k, v]) => {
+      if (v && !appState.prepBookings[k]) { appState.prepBookings[k] = true; mergedItems++; }
+    });
+    Object.entries(recNotes).forEach(([dateKey, text]) => {
+      const dayObj = itineraryData.find(d => d.date === dateKey);
+      if (dayObj && text && !appState.notes[dayObj.id]) { appState.notes[dayObj.id] = text; mergedItems++; }
+    });
+    appState.storeQuotes = appState.storeQuotes || {};
+    Object.entries(recQuotes).forEach(([cat, q]) => {
+      if (q && !appState.storeQuotes[cat]) { appState.storeQuotes[cat] = q; mergedItems++; }
+    });
+    const existingIds = new Set((appState.expenses || []).map(e => String(e.id)));
+    const fx = Number(recTrip.fx) || getFxRate();
+    (recTrip.expenses || []).forEach(exp => {
+      if (!existingIds.has(String(exp.id))) {
+        const jpy = exp.currency === 'USD' ? Math.round((Number(exp.amount) || 0) * fx) : Math.round(Number(exp.amount) || 0);
+        appState.expenses.unshift({
+          id: exp.id,
+          title: exp.note || exp.category || 'Yedek Harcama',
+          category: 'Alışveriş & Teknoloji & Saat (Hediyelik Dahil)',
+          amountJPY: jpy,
+          date: exp.date || 'Yedek'
+        });
+        existingIds.add(String(exp.id));
+        addedExpenses++;
+      }
+    });
+    return { addedExpenses, mergedItems };
+  }
+
+  // Conflict-safe merge for Koyo Master state
+  const mapKeys = ['completedStops', 'checklist', 'prepBookings', 'marketBasket', 'basketChecks', 'shopInspections'];
+  mapKeys.forEach(mk => {
+    if (incoming && incoming[mk] && typeof incoming[mk] === 'object') {
+      appState[mk] = appState[mk] || {};
+      Object.entries(incoming[mk]).forEach(([k, v]) => {
+        if (v && !appState[mk][k]) { appState[mk][k] = v; mergedItems++; }
+      });
+    }
+  });
+  if (incoming && incoming.notes) {
+    appState.notes = appState.notes || {};
+    Object.entries(incoming.notes).forEach(([k, v]) => {
+      if (v && !appState.notes[k]) { appState.notes[k] = v; mergedItems++; }
+    });
+  }
+  if (incoming && incoming.shopPurchased) {
+    appState.shopPurchased = appState.shopPurchased || {};
+    Object.entries(incoming.shopPurchased).forEach(([k, v]) => {
+      if (v && v.bought && !(appState.shopPurchased[k] && appState.shopPurchased[k].bought)) {
+        appState.shopPurchased[k] = v;
+        mergedItems++;
+      }
+    });
+  }
+  if (incoming && incoming.dayPlans) {
+    appState.dayPlans = appState.dayPlans || {};
+    Object.entries(incoming.dayPlans).forEach(([k, v]) => {
+      if (v && !appState.dayPlans[k]) { appState.dayPlans[k] = v; mergedItems++; }
+    });
+  }
+  if (incoming && Array.isArray(incoming.expenses)) {
+    const existingIds = new Set((appState.expenses || []).map(e => String(e.id)));
+    incoming.expenses.forEach(exp => {
+      if (exp && !existingIds.has(String(exp.id))) {
+        appState.expenses.push(exp);
+        existingIds.add(String(exp.id));
+        addedExpenses++;
+      }
+    });
+  }
+  return { addedExpenses, mergedItems };
+}
+
 function importStateInline() {
   const area = document.getElementById('sync-code-area');
   const raw = area ? area.value.trim() : '';
-  if (!raw) { showToast('Önce eşinizden gelen veri kodunu yapıştırın'); return; }
+  if (!raw) { showToast('Önce eşinizden gelen veri kodunu veya JSON yedeğini yapıştırın'); return; }
   try {
     const parsed = raw.includes('#sync=')
       ? JSON.parse(decodeURIComponent(escape(atob(raw.split('#sync=')[1]))))
       : JSON.parse(raw);
-    appState = Object.assign(appState, parsed);
+    const stats = mergePartnerState(parsed);
     saveMasterState();
     applyTheme();
     updateMapProviderButton();
@@ -2280,9 +2570,9 @@ function importStateInline() {
     renderBudget();
     renderGuide();
     closeSyncModal();
-    showToast('Veriler başarıyla eşitlendi');
+    showToast(`Akıllı birleştirme tamam: +${stats.addedExpenses} harcama, +${stats.mergedItems} kayıt eklendi`);
   } catch (e) {
-    showToast('Geçersiz veri kodu formatı');
+    showToast('Geçersiz veri kodu veya JSON formatı');
   }
 }
 
@@ -2416,6 +2706,471 @@ function handleSearch(term) {
       `).join('')}
     </div>
   `;
+}
+
+// ==========================================================================
+// v7 MASTER COLAB: PLANNER OVERLAY, OSM MAP, STORE QUOTE COMPARE, ADVISOR
+// ==========================================================================
+
+function togglePrepBooking(id) {
+  if (!appState.prepBookings) appState.prepBookings = {};
+  appState.prepBookings[id] = !appState.prepBookings[id];
+  saveMasterState();
+  renderGuide();
+  showToast(appState.prepBookings[id] ? 'Hazırlık tamamlandı işaretlendi' : 'İşaret kaldırıldı');
+}
+
+function buildAdvisorDeskHtml(dayIdx) {
+  const day = itineraryData[dayIdx] || itineraryData[0];
+  if (!day) return '';
+  const activePlan = appState.dayPlans && appState.dayPlans[day.id] ? appState.dayPlans[day.id].current : null;
+  const resolved = typeof koyoPlanner !== 'undefined' ? koyoPlanner.overlay(day, activePlan, appState.completedStops) : day.stops;
+  const remaining = resolved.filter((s, idx) => {
+    const sid = s.sid || s.stopId || `${day.id}-s${s.origIndex !== undefined ? s.origIndex : idx}`;
+    return !appState.completedStops[sid];
+  });
+  const locked = remaining.filter((s, i) => typeof koyoPlanner !== 'undefined' && koyoPlanner.isProtectedStop(day, s, s.origIndex !== undefined ? s.origIndex : i));
+  const fx = getFxRate();
+  const spentJPY = (appState.expenses || []).reduce((sum, e) => sum + (Number(e.amountJPY) || 0), 0);
+  const spentUSD = Math.round(spentJPY / fx);
+  const remUSD = (budgetData.totalBudgetUSD || 9000) - spentUSD;
+  const pendingPrep = bookingsPrepData.filter(b => !(appState.prepBookings && appState.prepBookings[b.id]));
+  const nextPrep = pendingPrep.find(b => b.date >= day.date) || pendingPrep[0];
+
+  return `
+    <div style="margin-bottom:14px;">
+      <span class="section-eyebrow" style="color:var(--vermilion);">Codex Colab • 3-Alan Akıllı Plan Denetimi (${day.date})</span>
+      <div class="advisor-desk-grid">
+        <div class="advisor-mini-card" style="border-top:3px solid var(--sky);">
+          <div>
+            <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky);">ROTA DENETİMİ</span>
+            <h4 style="font-size:0.94rem; font-weight:800; margin-top:6px;">${locked.length ? `${locked.length} Korunan Saat / Bilet` : `${remaining.length} Kalan Durak`}</h4>
+            <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:4px;">
+              ${locked.length ? `Öncelikli saat: ${locked[0].time} • ${locked[0].name}` : 'Bugün esnek bir rota günü. Geç kalırsan planı güvenle kaydırabilirsin.'}
+            </p>
+          </div>
+          <button class="action-chip map-route" onclick="switchTab('itinerary'); openPlannerModal('delay');" style="justify-content:center;">Günü Esnet / Geciktik</button>
+        </div>
+
+        <div class="advisor-mini-card" style="border-top:3px solid var(--matcha);">
+          <div>
+            <span class="stop-cat-tag" style="background:var(--matcha-soft); color:var(--matcha);">BÜTÇE DENETİMİ</span>
+            <h4 class="font-size:0.94rem; font-weight:800; margin-top:6px;" style="font-size:0.94rem; font-weight:800; margin-top:6px;">$${remUSD.toLocaleString()} Kalan Pay</h4>
+            <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:4px;">
+              $9.000 tavandan $${spentUSD.toLocaleString()} harcama düşüldü (Plan kuru: $1 = ¥${fx}).
+            </p>
+          </div>
+          <button class="action-chip map-place" onclick="switchTab('budget')" style="justify-content:center;">Kategori Paylarını Aç →</button>
+        </div>
+
+        <div class="advisor-mini-card" style="border-top:3px solid var(--gold);">
+          <div>
+            <span class="stop-cat-tag" style="background:var(--gold-soft); color:var(--gold);">HAZIRLIK DENETİMİ</span>
+            <h4 style="font-size:0.94rem; font-weight:800; margin-top:6px;">${pendingPrep.length ? `${pendingPrep.length} İşlem Bekliyor` : 'Tüm Hazırlıklar Tamam'}</h4>
+            <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:4px;">
+              ${nextPrep ? `Sıradaki (${nextPrep.date}): ${nextPrep.title}` : 'Tüm resmi bilet ve hazırlık adımları işaretlendi.'}
+            </p>
+          </div>
+          ${nextPrep ? `<a href="${escapeAttr(nextPrep.url)}" target="_blank" rel="noopener noreferrer" class="action-chip" style="justify-content:center;">Resmî İşlem Sayfası ↗</a>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+const COMPARE_CAPS_USD = {
+  fujifilm: 1200,
+  watch: 1500,
+  ps5: 550,
+  clothing: 700,
+  luggage: 950
+};
+
+function loadStoreCompareInputs() {
+  const cat = document.getElementById('cmp-cat')?.value || 'fujifilm';
+  const saved = (appState.storeQuotes && appState.storeQuotes[cat]) || { a: '', b: '' };
+  const elA = document.getElementById('cmp-a');
+  const elB = document.getElementById('cmp-b');
+  if (elA) elA.value = saved.a || '';
+  if (elB) elB.value = saved.b || '';
+  recalcStoreCompare();
+}
+
+function recalcStoreCompare() {
+  const catEl = document.getElementById('cmp-cat');
+  const elA = document.getElementById('cmp-a');
+  const elB = document.getElementById('cmp-b');
+  const out = document.getElementById('cmp-result');
+  if (!catEl || !elA || !elB || !out) return;
+
+  const cat = catEl.value;
+  const rawA = elA.value.trim();
+  const rawB = elB.value.trim();
+  if (!appState.storeQuotes) appState.storeQuotes = {};
+  appState.storeQuotes[cat] = { a: rawA, b: rawB };
+  saveMasterState();
+
+  const valA = Number(rawA);
+  const valB = Number(rawB);
+  const valid = [valA, valB].filter(v => Number.isFinite(v) && v > 0);
+  const fx = getFxRate();
+  const capUSD = COMPARE_CAPS_USD[cat] || 1000;
+
+  if (!valid.length) {
+    out.innerHTML = `<div style="font-size:0.78rem; color:var(--text-muted);">Kategori tavanı: <strong>$${capUSD.toLocaleString()}</strong> (¥${(capUSD * fx).toLocaleString()}). İki mağaza fiyatını yazarak kıyaslayın.</div>`;
+    return;
+  }
+
+  const best = Math.min(...valid);
+  const bestUSD = best / fx;
+  const over = bestUSD > capUSD;
+  let diffMsg = '';
+  if (valid.length === 2) {
+    if (valA === valB) diffMsg = 'İki mağazanın teklifi eşit.';
+    else {
+      const winner = valA < valB ? 'Mağaza A' : 'Mağaza B';
+      const diffJPY = Math.abs(valA - valB);
+      diffMsg = `<strong>${winner}</strong> ¥${diffJPY.toLocaleString()} (~$${Math.round(diffJPY / fx)}) daha avantajlı.`;
+    }
+  } else {
+    diffMsg = `Girilen teklif: ¥${best.toLocaleString()} (~$${Math.round(bestUSD)}).`;
+  }
+
+  out.innerHTML = `
+    <div style="padding:9px 11px; border-radius:var(--radius-md); background:${over ? 'var(--vermilion-soft)' : 'var(--matcha-soft)'}; font-size:0.8rem;">
+      <div>${diffMsg}</div>
+      <div style="margin-top:4px; font-weight:800; color:${over ? 'var(--vermilion)' : 'var(--matcha)'};">
+        ${over ? `Kategori tavanı ($${capUSD.toLocaleString()}) $${Math.round(bestUSD - capUSD)} aşılıyor!` : `Kategori tavanı içinde; alım sonrası ~$${Math.round(capUSD - bestUSD)} pay kalır.`}
+      </div>
+    </div>
+  `;
+}
+
+function openPlannerModal(mode) {
+  const modal = document.getElementById('planner-modal');
+  const day = itineraryData[currentDayIndex];
+  if (!modal || !day) return;
+  const active = appState.dayPlans && appState.dayPlans[day.id] ? appState.dayPlans[day.id].current : null;
+  plannerDraft = {
+    mode: mode || (active ? active.mode : 'delay'),
+    delay: active && Number.isInteger(active.delay) ? active.delay : 30,
+    skip: active && Array.isArray(active.skip) ? [...active.skip] : null
+  };
+  renderPlannerModal();
+  modal.classList.add('open');
+}
+
+function closePlannerModal() {
+  const m = document.getElementById('planner-modal');
+  if (m) m.classList.remove('open');
+}
+
+function setPlannerMode(mode) {
+  plannerDraft.mode = mode;
+  plannerDraft.skip = null;
+  renderPlannerModal();
+}
+
+function setPlannerDelay(delay) {
+  plannerDraft.delay = Math.max(0, Math.min(180, Math.round(Number(delay) || 0)));
+  renderPlannerModal();
+}
+
+function togglePlannerSkip(stopIdx) {
+  const day = itineraryData[currentDayIndex];
+  if (!day || typeof koyoPlanner === 'undefined') return;
+  const currentPreview = koyoPlanner.preview({
+    day,
+    completedStops: appState.completedStops,
+    mode: plannerDraft.mode,
+    delay: plannerDraft.delay,
+    skip: plannerDraft.skip === null ? undefined : plannerDraft.skip,
+    activePlan: appState.dayPlans && appState.dayPlans[day.id] ? appState.dayPlans[day.id].current : null
+  });
+  const set = new Set(plannerDraft.skip === null ? currentPreview.plan.skip : plannerDraft.skip);
+  if (set.has(stopIdx)) set.delete(stopIdx);
+  else set.add(stopIdx);
+  plannerDraft.skip = Array.from(set);
+  renderPlannerModal();
+}
+
+function renderPlannerModal() {
+  const body = document.getElementById('planner-modal-body');
+  const day = itineraryData[currentDayIndex];
+  if (!body || !day || typeof koyoPlanner === 'undefined') return;
+
+  const activePlan = appState.dayPlans && appState.dayPlans[day.id] ? appState.dayPlans[day.id].current : null;
+  const res = koyoPlanner.preview({
+    day,
+    completedStops: appState.completedStops,
+    mode: plannerDraft.mode,
+    delay: plannerDraft.delay,
+    skip: plannerDraft.skip === null ? undefined : plannerDraft.skip,
+    activePlan
+  });
+
+  const skipSet = new Set(res.plan ? res.plan.skip : []);
+
+  body.innerHTML = `
+    <div style="margin-bottom:10px; font-size:0.81rem; color:var(--text-secondary);">
+      <strong>${day.date} • ${day.title}</strong> — Alınmış bilet saatleri (Nozomi / Sagano / Aoniyoshi / Uçuşlar) ve 22 Kas 13:00 bit pazarı hedefi otomatik korunur.
+    </div>
+
+    <div class="subtab-seg" style="margin-bottom:12px;">
+      <button class="subtab-seg-btn ${plannerDraft.mode === 'delay' ? 'active' : ''}" onclick="setPlannerMode('delay')">Geciktik (Saat Kaydır)</button>
+      <button class="subtab-seg-btn ${plannerDraft.mode === 'light' ? 'active' : ''}" onclick="setPlannerMode('light')">Günü Hafiflet</button>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <span style="font-size:0.74rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:6px;">GECİKME SÜRESİ (DAKİKA)</span>
+      <div class="planner-delay-chips">
+        ${[0, 15, 30, 60, 90, 120].map(m => `
+          <button class="filter-pill-btn ${plannerDraft.delay === m ? 'active' : ''}" onclick="setPlannerDelay(${m})">${m === 0 ? 'Kaydırma Yok' : '+' + m + ' dk'}</button>
+        `).join('')}
+      </div>
+    </div>
+
+    ${res.conflicts.length ? `
+      <div class="planner-conflict-box">
+        ${res.conflicts.map(c => `<div style="margin-bottom:3px;">${c}</div>`).join('')}
+      </div>
+    ` : ''}
+
+    <div class="editorial-card" style="padding:10px 12px; margin-bottom:12px;">
+      <span style="font-size:0.74rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:6px;">ÖNCE / SONRA ÖNİZLEMESİ (Esnek durakları dokunarak çıkarabilirsin)</span>
+      ${res.rows.map(row => {
+        const canToggle = koyoPlanner.isEligibleToSkip(day, day.stops[row.index], row.index, appState.completedStops);
+        const isSkipped = skipSet.has(row.index);
+        return `
+          <div class="planner-row is-${row.status}">
+            <div style="min-width:0; flex:1;">
+              <div style="font-weight:700; color:var(--text-main);">${row.index + 1}. ${row.name}</div>
+              <div class="tabular" style="font-size:0.75rem; color:var(--text-secondary);">
+                ${row.status === 'skipped'
+                  ? `<span>${row.before} → <strong>Çıkarılacak</strong></span>`
+                  : row.status === 'moved'
+                    ? `<span>${row.before} → <strong class="planner-new-time">${row.after}</strong></span>`
+                    : row.status === 'locked'
+                      ? `<span><strong>${row.before}</strong> • Korunan Saat</span>`
+                      : `<span>${row.before} • Değişmez</span>`
+                }
+              </div>
+            </div>
+            ${canToggle ? `
+              <button class="action-chip ${isSkipped ? 'map-route' : ''}" onclick="togglePlannerSkip(${row.index})" style="min-height:32px; padding:4px 9px;">
+                ${isSkipped ? 'Geri Al' : 'Çıkar'}
+              </button>
+            ` : `<span class="stop-cat-tag">${row.status === 'done' ? 'Bitti' : 'Sabit'}</span>`}
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <p style="font-size:0.74rem; color:var(--text-muted); margin-bottom:12px;">${res.warnings.join(' ')}</p>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="hdr-btn hdr-primary" ${res.canApply ? '' : 'disabled style="opacity:0.45; cursor:not-allowed; flex:1; justify-content:center;"'} onclick="applyDayPlanOverlay()" style="flex:1; justify-content:center; min-height:44px;">
+        Bu Alternatifi Uygula
+      </button>
+      ${activePlan ? `<button class="hdr-btn" onclick="resetDayPlan('${day.id}'); closePlannerModal();" style="min-height:44px;">Ana Plana Dön</button>` : ''}
+    </div>
+  `;
+}
+
+function applyDayPlanOverlay() {
+  const day = itineraryData[currentDayIndex];
+  if (!day || typeof koyoPlanner === 'undefined') return;
+  const prevRec = appState.dayPlans ? appState.dayPlans[day.id] : null;
+  const activePlan = prevRec && prevRec.current ? prevRec.current : null;
+  const res = koyoPlanner.preview({
+    day,
+    completedStops: appState.completedStops,
+    mode: plannerDraft.mode,
+    delay: plannerDraft.delay,
+    skip: plannerDraft.skip === null ? undefined : plannerDraft.skip,
+    activePlan
+  });
+  if (!res.canApply || !res.plan) {
+    showToast('Çakışma nedeniyle alternatif uygulanamadı');
+    return;
+  }
+  if (!appState.dayPlans) appState.dayPlans = {};
+  appState.dayPlans[day.id] = {
+    current: res.plan,
+    previous: activePlan || null
+  };
+  saveMasterState();
+  closePlannerModal();
+  renderDay(currentDayIndex);
+  showToast('Esnek gün planı uygulandı');
+}
+
+function undoDayPlan(dayId) {
+  if (!appState.dayPlans || !appState.dayPlans[dayId]) return;
+  const rec = appState.dayPlans[dayId];
+  if (rec.previous) {
+    appState.dayPlans[dayId] = { current: rec.previous };
+  } else {
+    delete appState.dayPlans[dayId];
+  }
+  saveMasterState();
+  renderDay(currentDayIndex);
+  showToast('Önceki gün planına dönüldü');
+}
+
+function resetDayPlan(dayId) {
+  if (appState.dayPlans) delete appState.dayPlans[dayId];
+  saveMasterState();
+  renderDay(currentDayIndex);
+  showToast('Özgün ana plana dönüldü');
+}
+
+function toggleDayOsmMap(dayIdx) {
+  osmPanelOpen = !osmPanelOpen;
+  renderDay(currentDayIndex);
+}
+
+function resolveStopCoords(stop) {
+  if (!stop || !coordsData) return null;
+  const hay = ((stop.name || '') + ' ' + (stop.mapsQuery || '')).toLowerCase();
+  const aliasRules = [
+    [/heiwajima/, 'Haneda Airport'],
+    [/takadanobaba|seiyu|samarkand/, 'Takadanobaba Station'],
+    [/shinjuku gyoen/, 'Shinjuku Gyo-en'],
+    [/yodobashi camera.*shinjuku|map camera/, 'Shinjuku Station'],
+    [/metropolitan/, 'Tokyo Metropolitan Government Building'],
+    [/meiji/, 'Meiji Shrine'],
+    [/ginkgo|icho/, 'Meiji Shrine'],
+    [/cat street|harajuku/, 'Harajuku Station'],
+    [/shibuya/, 'Shibuya'],
+    [/senso-ji|asakusa/, 'Sensō-ji'],
+    [/ameyoko|ueno/, 'Ueno Park'],
+    [/rikugien|komagome/, 'Rikugi-en'],
+    [/shinagawa/, 'Shinagawa Station'],
+    [/shin-osaka/, 'Shin-Osaka Station'],
+    [/dotonbori|glico|namba|honolu namba/, 'Dōtonbori'],
+    [/osaka castle/, 'Osaka Castle'],
+    [/kuromon/, 'Kuromon Ichiba Market'],
+    [/umeda/, 'Umeda'],
+    [/himeji/, 'Himeji Castle'],
+    [/kobe/, 'Kobe Port Tower'],
+    [/katsuo/, 'Katsuō-ji'],
+    [/minoh/, 'Minoh Falls'],
+    [/shinsekai|tsutenkaku/, 'Tsūtenkaku'],
+    [/kurashiki/, 'Kurashiki Bikan Historical Quarter'],
+    [/kiyomizu/, 'Kiyomizu-dera'],
+    [/gion|hanamikoji/, 'Gion'],
+    [/arashiyama|tenryu|sagano/, 'Arashiyama'],
+    [/umahori/, 'Umahori Station'],
+    [/higashiyama|nanzen|eikan/, 'Nanzen-ji'],
+    [/fushimi inari/, 'Fushimi Inari-taisha'],
+    [/byodo|uji|taihoan/, 'Byōdō-in'],
+    [/nijo/, 'Nijō Castle'],
+    [/todai|nara/, 'Tōdai-ji'],
+    [/kinkaku/, 'Kinkaku-ji'],
+    [/ryoan/, 'Ryōan-ji'],
+    [/imperial/, 'Kyoto Imperial Palace'],
+    [/philosopher/, 'Philosopher\'s Path'],
+    [/fushimi/, 'Fushimi Inari-taisha'],
+    [/ginza/, 'Ginza'],
+    [/azabudai|borderless/, 'Azabudai Hills'],
+    [/akihabara|super potato/, 'Akihabara'],
+    [/nakano/, 'Nakano Broadway'],
+    [/shimokitazawa/, 'Shimokitazawa'],
+    [/kawaguchiko|oishi|fuji/, 'Lake Kawaguchi'],
+    [/haneda/, 'Haneda Airport']
+  ];
+  for (const [re, key] of aliasRules) {
+    if (re.test(hay) && coordsData[key]) return { label: key, ...coordsData[key] };
+  }
+  for (const [k, v] of Object.entries(coordsData)) {
+    const kl = k.toLowerCase();
+    if (kl.length > 4 && hay.includes(kl.split(' ')[0])) return { label: k, ...v };
+  }
+  return null;
+}
+
+function renderOsmMapBoxHtml(day, stops) {
+  const mappedCount = (stops || []).filter(s => resolveStopCoords(s)).length;
+  return `
+    <div class="osm-map-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+        <div>
+          <strong style="font-size:0.9rem;">${day.date} • İnteraktif Konum Önizlemesi (${mappedCount} durak)</strong>
+          <span style="display:block; font-size:0.73rem; color:var(--text-muted);">OpenStreetMap haritası yalnızca kamusal durakları gösterir; özel ev adresleri haritaya gönderilmez.</span>
+        </div>
+      </div>
+      <div id="osm-map-frame" class="osm-map-frame">
+        <div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--text-muted);">Harita katmanı yükleniyor…</div>
+      </div>
+    </div>
+  `;
+}
+
+let activeLeafletInstance = null;
+
+function mountLeafletMapForDay(day, stops) {
+  if (typeof document === 'undefined') return;
+  const frame = document.getElementById('osm-map-frame');
+  if (!frame) return;
+
+  const points = [];
+  (stops || []).forEach((s) => {
+    const c = resolveStopCoords(s);
+    if (c) points.push({ lat: c.lat, lng: c.lng, title: s.name, time: s.time, num: (s.origIndex !== undefined ? s.origIndex + 1 : points.length + 1) });
+  });
+
+  if (!points.length) {
+    frame.innerHTML = '<div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--text-muted);">Bu gün için eşleşen kamusal harita pini bulunamadı; yukarıdaki "Tüm Günü Haritada Gör" düğmesini kullanabilirsiniz.</div>';
+    return;
+  }
+
+  const draw = () => {
+    if (typeof window.L === 'undefined') return;
+    if (activeLeafletInstance) {
+      try { activeLeafletInstance.remove(); } catch (e) {}
+      activeLeafletInstance = null;
+    }
+    frame.innerHTML = '';
+    const map = window.L.map(frame, { scrollWheelZoom: false });
+    activeLeafletInstance = map;
+    window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    const latLngs = points.map(p => [p.lat, p.lng]);
+    latLngs.forEach((ll, idx) => {
+      const pt = points[idx];
+      window.L.marker(ll).addTo(map).bindPopup(`<strong>${pt.num}. ${pt.title}</strong><br>${pt.time}`);
+    });
+    if (latLngs.length > 1) {
+      window.L.polyline(latLngs, { color: '#1b2845', weight: 3, dashArray: '6 6', opacity: 0.7 }).addTo(map);
+    }
+    map.fitBounds(latLngs, { padding: [26, 26], maxZoom: 14 });
+  };
+
+  if (typeof window.L !== 'undefined') {
+    draw();
+    return;
+  }
+
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'leaflet-css';
+    link.rel = 'stylesheet';
+    link.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+  if (!document.getElementById('leaflet-js')) {
+    const script = document.createElement('script');
+    script.id = 'leaflet-js';
+    script.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = draw;
+    script.onerror = () => {
+      frame.innerHTML = '<div style="padding:20px; text-align:center; font-size:0.82rem; color:var(--vermilion);">Çevrimdışı modda veya bağlantı yokken harita karoları yüklenemedi. Yukarıdaki Google / Apple Maps butonlarını kullanın.</div>';
+    };
+    document.head.appendChild(script);
+  }
 }
 
 if (typeof window !== 'undefined') {
