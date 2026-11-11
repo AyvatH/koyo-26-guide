@@ -2679,9 +2679,20 @@ function openWalletModal() {
         <div style="font-size:0.8rem; color:var(--text-secondary); background:var(--card-tint); padding:8px 10px; border-radius:var(--radius-md); margin-bottom:8px;">
           ${t.actionNote}
         </div>
-        <button class="action-chip map-route" onclick="closeWalletModal(); switchTab('itinerary'); selectDay(${t.dayIndex});" style="width:100%; justify-content:center;">
-          <span>İlgili Günün Rotasına Git</span> ${ico('arrowRight')}
-        </button>
+        ${(t.pnr || t.seat || t.ticketNo) ? `
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; font-size:0.75rem;">
+            ${t.pnr ? `<span class="stop-cat-tag tabular" style="background:rgba(99,41,209,0.1); color:var(--shinkansen);">PNR: ${t.pnr}</span>` : ''}
+            ${t.seat ? `<span class="stop-cat-tag tabular" style="background:var(--gold-soft); color:var(--gold);">${t.seat}</span>` : ''}
+            ${t.ticketNo ? `<span class="stop-cat-tag tabular">${t.ticketNo}</span>` : ''}
+          </div>
+        ` : ''}
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="action-chip map-route" onclick="closeWalletModal(); switchTab('itinerary'); selectDay(${t.dayIndex});" style="flex:1; justify-content:center;">
+            <span>İlgili Günün Rotasına Git</span> ${ico('arrowRight')}
+          </button>
+          ${t.pnr ? `<button class="action-chip" onclick="copyTextQuick('${escapeAttr(t.pnr)}', 'Rezervasyon kodu kopyalandı')">${ico('copy')} <span>Kodu Kopyala</span></button>` : ''}
+          ${t.eTicketUrl ? `<a href="${escapeAttr(t.eTicketUrl)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="justify-content:center;"><span>Canlı E-Bilet Aç ↗</span></a>` : ''}
+        </div>
       </div>
     </div>
   `).join('');
@@ -2715,12 +2726,12 @@ function openWalletModal() {
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px; font-size:0.8rem;">
         <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
-          <strong style="color:#fbbf24;">Varış: QR812 (Qatar Airways)</strong><br>
+          <strong style="color:#fbbf24;">Gidiş: İslamabad (ISB) → Doha → Haneda (QR812)</strong><br>
           21 Kas 22:55 Haneda Terminal 3 → Visit Japan Web QR → 1F Group Bus Stop <strong>00:40 / 01:40</strong> Heiwajima Onsen ücretsiz servisi.
         </div>
         <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
-          <strong style="color:#86efac;">Dönüş: TG683 • 12 Ara 10:35</strong><br>
-          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 kalkış 07:35 hedef.
+          <strong style="color:#86efac;">Dönüş: Haneda (TG683) → Bangkok → İslamabad (ISB) • 12 Ara 10:35</strong><br>
+          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 varış 07:35 hedef.
         </div>
       </div>
       <div class="flight-exit-steps">

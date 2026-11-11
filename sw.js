@@ -1,4 +1,4 @@
-const CACHE_NAME = 'japonya-2026-koyo-v10-enc';
+const CACHE_NAME = 'japonya-2026-koyo-v11-enc';
 const ASSETS = [
   './',
   './index.html',
