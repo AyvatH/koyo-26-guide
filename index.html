@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Japonya 2026 • Özel Rehber</title>
+
+  <!-- Apple iOS PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Japonya ’26">
+  <meta name="theme-color" content="#f5f1e8">
+
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body class="tab-itinerary">
+
+  <!-- ÖZEL ERİŞİM KİLİDİ (AES-256-GCM ŞİFRELİ KASA) -->
+  <div id="vault-lock-screen" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg); align-items:center; justify-content:center; padding:20px;">
+    <div style="width:min(94vw, 400px); background:var(--card-bg); border:1px solid var(--border); border-radius:24px; padding:28px 22px; box-shadow:var(--shadow-lg); text-align:center;">
+      <div class="brand-seal" style="width:54px; height:54px; margin:0 auto 14px auto; border-radius:14px;">
+        <span class="seal-kanji" style="font-size:1rem;">日本</span>
+        <span class="seal-year" style="font-size:0.65rem;">2026</span>
+      </div>
+      <span class="section-eyebrow">AES-256-GCM Şifreli Özel Kasa</span>
+      <h1 style="font-family:var(--font-serif); font-size:1.45rem; font-weight:800; margin:4px 0 6px 0; color:var(--text-main);">Özel Seyahat Rehberi</h1>
+      <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:18px;">
+        Adres, bilet ve rota verileri cihazınızda çözülür. Şifreyi yalnızca bir kez girmeniz yeterlidir.
+      </p>
+      <form onsubmit="return submitVaultUnlock(event)" style="display:flex; flex-direction:column; gap:10px; text-align:left;">
+        <div style="display:flex; gap:6px;">
+          <input type="password" id="vault-pass-input" class="search-input" style="padding:10px 14px; flex:1;" placeholder="Erişim Şifresi" autocomplete="current-password">
+          <button type="button" class="hdr-btn" onclick="toggleVaultPassVis()" style="min-height:44px;">Göster</button>
+        </div>
+        <label class="touch-check-row" for="vault-remember-chk" style="border-bottom:none; padding:2px 0; font-size:0.82rem;">
+          <input type="checkbox" id="vault-remember-chk" checked style="accent-color:var(--vermilion);">
+          <span>Bu telefonda kilidi hatırla (önerilen)</span>
+        </label>
+        <div id="vault-error-msg" style="font-size:0.8rem; font-weight:700; color:var(--vermilion); min-height:18px;"></div>
+        <button type="submit" id="vault-unlock-btn" class="hdr-btn hdr-primary" style="width:100%; min-height:48px; justify-content:center; border-radius:12px; font-size:0.92rem;">
+          Kilidi Aç
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- Üst Yapışkan Cam Header (iPhone Notch / Dynamic Island Uyumlu) -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div class="brand-wrapper" onclick="switchTab('itinerary'); selectDay(0);" style="cursor:pointer;">
+          <div class="brand-seal" aria-hidden="true">
+            <span class="seal-kanji">日本</span>
+            <span class="seal-year">2026</span>
+          </div>
+          <div class="brand-text">
+            <div class="brand-title">Japonya Seyahat Rehberi</div>
+            <div class="brand-sub">
+              <span class="sync-dot"></span>
+              <span id="storage-mode-label">Cihazda Kayıtlı • 21 Kas – 12 Ara</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="hdr-btn hdr-primary" onclick="openWalletModal()" title="Alınmış Tren Biletleri ve Ev Adresleri" aria-label="Biletler ve Ev Adresleri">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            <span>Bilet &amp; Ev</span>
+          </button>
+          <button class="hdr-btn" onclick="openSyncModal()" title="İki Telefon Arasında Eşitle" aria-label="Eşitle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span class="hide-xs">Eşitle</span>
+          </button>
+          <button class="hdr-btn hdr-icon-only" onclick="toggleDarkMode()" id="theme-toggle-btn" title="Gece / Gündüz Modu" aria-label="Tema Değiştir">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Yalnızca Rota Sekmesinde Açık Kalan Şehir & Gün Seçici -->
+      <div id="itinerary-header-nav" class="itinerary-only-nav">
+        <div class="city-segmented-bar" id="city-segments"></div>
+        <div class="date-nav" id="date-nav"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ana İçerik Alanı (Masaüstünde 2 Kolonlu Editorial Düzen, iPhone'da Akışkan Tek Kolon) -->
+  <main class="container">
+
+    <!-- SEKME 1: ROTA (GÜNLÜK PLAN & ZAMAN ÇİZELGESİ) -->
+    <section id="view-itinerary" class="tab-view active">
+      <div class="toolbar-row">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="global-search" class="search-input" placeholder="Durak, helal restoran, mağaza, Fuji veya bilet ara...">
+        </div>
+        <button class="hdr-btn toolbar-btn" onclick="toggleMapProvider()" id="map-provider-btn" title="Harita Uygulamasını Değiştir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+          <span class="hide-xs">Google</span>
+        </button>
+        <button class="hdr-btn toolbar-btn" onclick="toggleAllDrawers()" id="expand-all-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          <span>Detaylar</span>
+        </button>
+      </div>
+
+      <div id="day-container"></div>
+    </section>
+
+    <!-- SEKME 2: YEMEK & MARKET -->
+    <section id="view-halal" class="tab-view">
+      <div id="halal-container"></div>
+    </section>
+
+    <!-- SEKME 3: ALIŞVERİŞ & TAX-FREE -->
+    <section id="view-shopping" class="tab-view">
+      <div id="shopping-list-container"></div>
+    </section>
+
+    <!-- SEKME 4: BÜTÇE -->
+    <section id="view-budget" class="tab-view">
+      <div id="budget-container"></div>
+    </section>
+
+    <!-- SEKME 5: REHBER & ARAÇLAR -->
+    <section id="view-guide" class="tab-view">
+      <div id="guide-container"></div>
+    </section>
+
+  </main>
+
+  <!-- SAHA ACİL KARAR ASİSTANI (KRİZ ÇÖZ FAB) -->
+  <button class="crisis-fab" id="crisis-fab" onclick="openCrisisModal()" aria-label="Saha Acil Karar Asistanı">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    <span>Kriz Çöz</span>
+  </button>
+
+  <!-- MODAL 1: BİLETLER & KONAKLAMALAR CÜZDANI -->
+  <div class="modal-overlay" id="wallet-modal" onclick="if(event.target===this)closeWalletModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow">Hızlı Erişim Cüzdanı</span>
+          <h2 class="modal-title">Alınmış Biletler &amp; Ev Adresleri</h2>
+        </div>
+        <button class="hdr-btn" onclick="closeWalletModal()">Kapat</button>
+      </div>
+      <div id="wallet-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: PERSONELE TAM EKRAN JAPONCA GÖSTERİM & TAKSİ KARTI -->
+  <div class="modal-overlay" id="staff-card-modal" onclick="if(event.target===this)closeStaffModal()">
+    <div class="modal-sheet staff-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-eyebrow" style="margin-bottom:10px;">
+        Görevliye / Taksiciye Gösterilecek Kart (店員さんへ)
+      </div>
+      <div id="staff-card-jp" class="staff-card-jp-box"></div>
+      <div id="staff-card-romaji" class="staff-card-romaji"></div>
+      <div id="staff-card-tr" class="staff-card-tr"></div>
+      <div class="modal-footer-actions">
+        <button class="hdr-btn hdr-primary" onclick="speakStaffCard()" style="flex:1; justify-content:center; min-height:48px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+          <span>Japonca Oku</span>
+        </button>
+        <button class="hdr-btn" onclick="closeStaffModal()" style="flex:1; justify-content:center; min-height:48px;">
+          <span>Kapat</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: İKİ KİŞİ CANLI EŞİTLEME -->
+  <div class="modal-overlay" id="sync-modal" onclick="if(event.target===this)closeSyncModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow" style="color:var(--sky);">Veri &amp; Senkronizasyon</span>
+          <h2 class="modal-title">İki Telefon Arasında Eşitleme</h2>
+        </div>
+        <button class="hdr-btn" onclick="closeSyncModal()">Kapat</button>
+      </div>
+      <div id="sync-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: KRİZ ÇÖZ (SAHA ACİL KARAR MOTORU) -->
+  <div class="modal-overlay" id="crisis-modal" onclick="if(event.target===this)closeCrisisModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow">Çevrimdışı Saha Asistanı</span>
+          <h2 class="modal-title">Anlık Kriz &amp; Karar Motoru</h2>
+        </div>
+        <button class="hdr-btn" onclick="closeCrisisModal()">Kapat</button>
+      </div>
+      <div id="crisis-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- TOAST BİLDİRİM ALANI -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- ALT YÜZEN CAM NAVİGASYON DOCK (5 SEKME) -->
+  <nav class="tab-bar" aria-label="Ana Menü">
+    <button class="tab-btn active" data-tab="itinerary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Rota</span>
+    </button>
+    <button class="tab-btn" data-tab="halal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+      <span>Yemek</span>
+    </button>
+    <button class="tab-btn" data-tab="shopping">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      <span>Alışveriş</span>
+    </button>
+    <button class="tab-btn" data-tab="budget">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
+      <span>Bütçe</span>
+    </button>
+    <button class="tab-btn" data-tab="guide">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+      <span>Rehber</span>
+    </button>
+  </nav>
+
+  <script>window.VAULT_LOCKED_MODE = true;</script>
+  <script src="js/data_encrypted.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/vault.js"></script>
+</body>
+</html>
