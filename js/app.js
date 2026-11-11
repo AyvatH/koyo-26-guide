@@ -551,7 +551,8 @@ function setTimelineFilter(f) {
 
 function buildBookedAnchorBanner(index) {
   const alerts = {
-    0: { badge: 'Heiwajima Ön Kayıt', text: '20 Kas 14:00’e kadar Welcome Course kaydı şart. Servisler T3 1F: 00:40 / 01:40 / 02:40.', hasIcs: true },
+    0: { badge: 'Qatar Airways (ISB→DOH→HND) & Heiwajima', text: 'İslamabad check-in biniş kartını (QR812) ATMA — Heiwajima resepsiyonuna verilecek! 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
+    5: { badge: 'Hakone Golden Course (Free Pass)', text: 'Shinjuku → Hakone-Yumoto → Tozan Dağ Treni → Owakudani Teleferik → Ashi Korsan Gemisi → Hakone Tapınağı. Çantada hazır öğle sepeti şart!', hasIcs: true },
     6: { badge: 'Nozomi 379 (Bilet Alındı)', text: 'Shinagawa 11:46 → Shin-Osaka 14:06 • En geç 11:25’te Shinagawa kapısında olun.', hasIcs: true },
     13: { badge: 'Sagano 7 (Bilet Alındı)', text: 'Torokko Saga 12:02 → Kameoka 12:25 • 11:45’te peronda olun; Bamboo Grove 10:00 başlar.', hasIcs: true },
     16: { badge: 'Aoniyoshi (14:55) + Todai-ji', text: '¥730 ek bilet alındı; turnikede +¥760 IC basılacak. Nara’ya inince ÖNCE Todai-ji’ye (17:00 kapanış!) yürüyün.', hasIcs: true },
@@ -1304,7 +1305,7 @@ function renderHalal() {
         <div class="editorial-card" style="margin-top:16px; border-left:4px solid var(--sky);">
           <span class="section-eyebrow" style="color:var(--sky);">Günlük Hazır Alışveriş Listeleri</span>
           <h3 style="font-size:1.06rem; font-weight:800; margin-bottom:4px;">Şehre Göre Market &amp; Tren Kumanyası Sepetleri (7 Liste)</h3>
-          <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Fuji günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
+          <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Hakone günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
           <div class="grid-2col">
             ${marketBasketsData.map((b, bIdx) => `
               <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-lg); padding:13px;">
@@ -2491,8 +2492,9 @@ function foldICSLine(line) {
 function downloadTripICS() {
   const events = [
     { uid: 'heiwajima-deadline@jp2026', start: '20261120T130000', end: '20261120T140000', summary: 'SON SAAT: Heiwajima Onsen Welcome Course Rezervasyonu', desc: 'QR812 ile 21 Kas gece giriş için online kayıt son saati 14:00 (JST).' },
-    { uid: 'qr812-arrival@jp2026', start: '20261121T225500', end: '20261121T232500', summary: 'QR812: Haneda Terminal 3 Varış (ALINMIŞ UÇUŞ)', desc: 'Pasaport, Visit Japan Web QR ve 00:40 Heiwajima servisi.' },
+    { uid: 'qr812-arrival@jp2026', start: '20261121T225500', end: '20261121T232500', summary: 'Qatar Airways QR812: İslamabad -> Doha -> Haneda T3 Varış', desc: 'Fiziki biniş kartını sakla, Visit Japan Web QR ve 00:40 Heiwajima servisi.' },
     { uid: 'rikugien-light@jp2026', start: '20261125T180000', end: '20261125T194500', summary: 'Rikugien Gece Işıklandırması (İlk Gece)', desc: '18:00-20:30 açılış, Komagome İstasyonu.' },
+    { uid: 'hakone-daytrip@jp2026', start: '20261126T073700', end: '20261126T183000', summary: 'Hakone Golden Course Day Trip (Free Pass)', desc: '07:37 Shinjuku Odakyu -> Hakone-Yumoto -> Owakudani -> Ashi Korsan Gemi -> Hakone Tapınağı.' },
     { uid: 'nozomi379@jp2026', start: '20261127T114600', end: '20261127T140600', summary: 'Nozomi 379: Shinagawa -> Shin-Osaka (ALINMIŞ BİLET)', desc: 'En geç 11:25 te peronda olun.' },
     { uid: 'sagano7@jp2026', start: '20261204T120200', end: '20261204T122500', summary: 'Sagano 7: Torokko Saga -> Torokko Kameoka (ALINMIŞ BİLET)', desc: '11:45 te peronda hazır olun. Vagon 1, 7A/7B.' },
     { uid: 'aoniyoshi@jp2026', start: '20261207T145500', end: '20261207T152800', summary: 'Aoniyoshi: Kyoto -> Kintetsu-Nara (+Todai-ji 17:00)', desc: '¥730 ek bilet alındı; +¥760 IC kart basılacak. Vagon 4, 2A/2B.' },
@@ -2727,11 +2729,12 @@ function openWalletModal() {
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px; font-size:0.8rem;">
         <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
           <strong style="color:#fbbf24;">Gidiş: İslamabad (ISB) → Doha → Haneda (QR812)</strong><br>
-          21 Kas 22:55 Haneda Terminal 3 → Visit Japan Web QR → 1F Group Bus Stop <strong>00:40 / 01:40</strong> Heiwajima Onsen ücretsiz servisi.
+          • <strong>Biniş &amp; Bagaj:</strong> Online check-in 24s önce • Helal ikram (MOML) standart • El çantasına 1 gecelik pijama/şarj al.<br>
+          • <strong>Kritik:</strong> QR812 fiziki biniş kartını (boarding pass) ATMA — 21 Kas 22:55 Haneda T3 → 00:40/01:40 Heiwajima Onsen’e verilecek!
         </div>
         <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
           <strong style="color:#86efac;">Dönüş: Haneda (TG683) → Bangkok → İslamabad (ISB) • 12 Ara 10:35</strong><br>
-          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 varış 07:35 hedef.
+          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 varış 07:35 hedef. Check-in öncesi pasaportla Tax-Free Kiosk!
         </div>
       </div>
       <div class="flight-exit-steps">
@@ -3293,7 +3296,7 @@ function openOverviewModal() {
     <div class="overview-summary-strip">
       <div>
         <div style="font-size:0.88rem; font-weight:800; color:var(--text-main);">22 Gün • ${completedStops}/${totalStops} Durak Tamamlandı</div>
-        <div style="font-size:0.75rem; color:var(--text-secondary);">Tokyo → Fuji → Takayama → Shirakawa-go → Kanazawa → Osaka → Kyoto → Tokyo</div>
+        <div style="font-size:0.75rem; color:var(--text-secondary);">İslamabad → Tokyo &amp; Hakone → Osaka &amp; Kobe/Himeji → Kyoto &amp; Nara → Tokyo → İslamabad</div>
       </div>
       <button class="action-chip map-route" onclick="jumpToTodayTripDay()">${ico('calendar')} <span>Bugüne Atla</span></button>
     </div>
@@ -3791,7 +3794,15 @@ function resolveStopCoords(stop) {
     [/akihabara|super potato/, 'Akihabara'],
     [/nakano/, 'Nakano Broadway'],
     [/shimokitazawa/, 'Shimokitazawa'],
-    [/kawaguchiko|oishi|fuji/, 'Lake Kawaguchi'],
+    [/hakone-yumoto|odakyu/, 'Hakone-Yumoto Station'],
+    [/owakudani|sounzan|tozan/, 'Owakudani'],
+    [/togendai|korsan gemi|ashi/, 'Togendai Port'],
+    [/hakone shrine|heiwa no torii|moto-hakone|tokaido/, 'Hakone Shrine'],
+    [/busta|expressway bus/, 'Shinjuku Station'],
+    [/chureito|arakurayama/, 'Chureito Pagoda'],
+    [/momiji corridor/, 'Momiji Corridor'],
+    [/oishi/, 'Oishi Park'],
+    [/kawaguchiko|fuji/, 'Lake Kawaguchi'],
     [/haneda/, 'Haneda Airport']
   ];
   for (const [re, key] of aliasRules) {
