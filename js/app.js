@@ -12,6 +12,7 @@ let accommodationsData = [];
 let bookedTicketsData = [];
 let bookingsPrepData = [];
 let marketBasketsData = [];
+let shoppingTipsData = {};
 let coordsData = {};
 let osmPanelOpen = false;
 let plannerDraft = { mode: 'delay', delay: 30, skip: null };
@@ -101,6 +102,11 @@ function initApp() {
     }
     if (typeof EMBEDDED_BOOKINGS_PREP !== 'undefined') bookingsPrepData = EMBEDDED_BOOKINGS_PREP || [];
     if (typeof EMBEDDED_BASKETS !== 'undefined') marketBasketsData = EMBEDDED_BASKETS || [];
+    if (typeof EMBEDDED_SHOPPING_EXTRAS !== 'undefined' && Array.isArray(EMBEDDED_SHOPPING_EXTRAS)) {
+      const seenIds = new Set((shoppingData || []).map(x => x.id));
+      shoppingData = [...(shoppingData || []), ...EMBEDDED_SHOPPING_EXTRAS.filter(x => x && !seenIds.has(x.id))];
+    }
+    if (typeof EMBEDDED_SHOPPING_TIPS !== 'undefined') shoppingTipsData = EMBEDDED_SHOPPING_TIPS || {};
     if (typeof EMBEDDED_COORDS !== 'undefined') coordsData = EMBEDDED_COORDS || {};
 
     loadMasterState();
@@ -1548,13 +1554,13 @@ function renderShopping() {
 
   const subBarHtml = `
     <div class="section-header-block">
-      <span class="section-eyebrow">Uzman Model &amp; Vergi İadesi Rehberi</span>
-      <h2 class="section-title">Alışveriş &amp; Kasa Hakemi</h2>
-      <p class="section-subtitle">Fujifilm, saat, PS5 CFI-2000, vintage ve valiz kontrol noktaları ile Kasım 2026 tax-free hesabı.</p>
+      <span class="section-eyebrow">Uzman Model, Mağaza &amp; Vergi İadesi Rehberi</span>
+      <h2 class="section-title">Alışveriş, Ne Nereden Alınır &amp; Kasa Hakemi</h2>
+      <p class="section-subtitle">Kamera, saat, PS5, kozmetik/eczane, Uji matcha, kırtasiye/bıçak, Uniqlo/JINS ve Kasım 2026 tax-free &amp; bagaj kuralları.</p>
     </div>
     <div class="subtab-seg">
-      <button class="subtab-seg-btn ${currentShopSubtab === 'catalog' ? 'active' : ''}" onclick="switchShopSubtab('catalog')">Model &amp; Mağaza Kataloğu</button>
-      <button class="subtab-seg-btn ${currentShopSubtab === 'taxfree' ? 'active' : ''}" onclick="switchShopSubtab('taxfree')">Tax-Free &amp; Kasa Hakemi</button>
+      <button class="subtab-seg-btn ${currentShopSubtab === 'catalog' ? 'active' : ''}" onclick="switchShopSubtab('catalog')">Tüm Kategoriler &amp; Rehber (${shoppingData.length})</button>
+      <button class="subtab-seg-btn ${currentShopSubtab === 'taxfree' ? 'active' : ''}" onclick="switchShopSubtab('taxfree')">Tax-Free, Kupon &amp; Kasa Hakemi</button>
     </div>
   `;
 
@@ -1599,7 +1605,7 @@ function renderShopping() {
 
         <div style="display:flex; flex-direction:column; gap:14px;">
           <div class="editorial-card" style="border-left:4px solid var(--matcha); margin-bottom:0;">
-            <span class="section-eyebrow" style="color:var(--matcha);">Codex Colab • Mağaza A vs B Teklif Kıyaslayıcı</span>
+            <span class="section-eyebrow" style="color:var(--matcha);">Fiyat Kıyaslayıcı • Mağaza A vs B</span>
             <h3 style="font-size:1.02rem; font-weight:800; margin-bottom:4px;">İki Mağaza Fiyatını Bütçeyle Kıyasla</h3>
             <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">
               Aynı model ve aynı kutu içeriği için iki mağazadan aldığınız vergi dahil ¥ fiyatlarını girin; kalan USD tavanına göre en kârlı seçeneği görün.
@@ -1639,6 +1645,7 @@ function renderShopping() {
   const categories = ['Tümü', ...new Set(shoppingData.map(s => s.category))];
   const filtered = currentShopCategory === 'Tümü' ? shoppingData : shoppingData.filter(s => s.category === currentShopCategory);
 
+  const fx = getFxRate();
   let boughtCount = 0;
   let totalPaidTaxFreeJPY = 0;
   shoppingData.forEach(item => {
@@ -1650,21 +1657,65 @@ function renderShopping() {
   });
   const estRefundJPY = Math.round(totalPaidTaxFreeJPY - (totalPaidTaxFreeJPY / 1.1));
 
+  const storeMatrixHtml = (shoppingTipsData && Array.isArray(shoppingTipsData.storeMatrix) && shoppingTipsData.storeMatrix.length)
+    ? `
+      <div class="editorial-card" style="margin-top:16px; border-left:4px solid var(--indigo);">
+        <span class="section-eyebrow" style="color:var(--indigo);">Saha Özeti • Ne Nereden Alınır?</span>
+        <h3 style="font-size:1.08rem; font-weight:800; margin-bottom:4px;">Japonya Akıllı Mağaza &amp; İndirim Matrisi</h3>
+        <p style="font-size:0.79rem; color:var(--text-muted);">Turistik mağaza farkı ödememek için her ürünü kendi uzman adresinden alın; ¥5.500 üzeri pasaport + turist kuponunu unutmayın.</p>
+        <div class="shop-matrix-grid">
+          ${shoppingTipsData.storeMatrix.map(row => `
+            <div class="shop-matrix-item">
+              <strong style="font-size:0.9rem; color:var(--text-main);">${row.type}</strong>
+              <div class="shop-matrix-store">${row.bestStore}</div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.45;">${row.secret}</p>
+            </div>
+          `).join('')}
+        </div>
+        ${(Array.isArray(shoppingTipsData.baggageRules) && shoppingTipsData.baggageRules.length) ? `
+          <div class="baggage-split-grid">
+            ${shoppingTipsData.baggageRules.map((rule, idx) => `
+              <div class="baggage-box ${idx === 0 ? 'is-cabin' : 'is-checked'}">
+                <strong style="display:block; margin-bottom:4px; color:var(--text-main);">${rule.where}</strong>
+                <span style="color:var(--text-secondary);">${rule.items}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `
+    : '';
+
   container.innerHTML = `
     ${subBarHtml}
     <div class="taxfree-pool-banner">
       <div>
         <span style="font-size:0.68rem; font-weight:800; opacity:0.8; letter-spacing:0.05em; display:block;">12 ARALIK HANEDA T3 KİOSK TAKİBİ</span>
-        <strong class="tabular" style="font-size:1rem;">${boughtCount}/${shoppingData.length} Ürün Alındı • Kayıtlı Harcama: ¥${totalPaidTaxFreeJPY.toLocaleString()}</strong>
+        <strong class="tabular" style="font-size:1rem;">${boughtCount}/${shoppingData.length} Kategori Alındı • Kayıtlı Harcama: ¥${totalPaidTaxFreeJPY.toLocaleString()}</strong>
       </div>
       <div style="text-align:right;">
-        <span style="font-size:0.68rem; opacity:0.8; display:block;">TAHMİNİ GÜMRÜK İADESİ</span>
-        <strong class="tabular" style="font-size:1.05rem; color:#34d399;">+¥${estRefundJPY.toLocaleString()} (~$${Math.round(estRefundJPY / 150)})</strong>
+        <span style="font-size:0.68rem; opacity:0.8; display:block;">TAHMİNİ GÜMRÜK İADESİ (~%10)</span>
+        <strong class="tabular" style="font-size:1.05rem; color:#34d399;">+¥${estRefundJPY.toLocaleString()} (~$${Math.round(estRefundJPY / fx)})</strong>
+      </div>
+    </div>
+
+    <div class="kpi-strip-grid">
+      <div class="kpi-mini-card">
+        <span class="kpi-mini-label">Tax-Free Eşiği</span>
+        <strong class="kpi-mini-val tabular">¥5.500+</strong>
+      </div>
+      <div class="kpi-mini-card">
+        <span class="kpi-mini-label">Yodobashi / Bic Kupon</span>
+        <strong class="kpi-mini-val tabular" style="color:var(--sky);">+%5 İndirim</strong>
+      </div>
+      <div class="kpi-mini-card">
+        <span class="kpi-mini-label">Mühürlü Poşet</span>
+        <strong class="kpi-mini-val" style="color:var(--vermilion);">Uçuşa Kadar Açma</strong>
       </div>
     </div>
 
     <div class="pill-filter-row">
-      ${categories.map(cat => `<button class="filter-pill-btn ${cat === currentShopCategory ? 'active' : ''}" onclick="filterShopping('${cat}')">${cat}</button>`).join('')}
+      ${categories.map(cat => `<button class="filter-pill-btn ${cat === currentShopCategory ? 'active' : ''}" onclick="filterShopping('${escapeAttr(cat)}')">${cat}</button>`).join('')}
     </div>
 
     <div class="grid-2col">
@@ -1674,87 +1725,104 @@ function renderShopping() {
         const inspList = item.inspections || [];
         const checkedInsp = inspList.filter((_, i) => appState.shopInspections[`${item.id}-insp-${i}`]).length;
         const purchaseRec = appState.shopPurchased[item.id] || { bought: false, paidJPY: '' };
+        const firstShop = (item.citiesAndShops && item.citiesAndShops[0]) ? item.citiesAndShops[0].split(':')[1] || item.citiesAndShops[0] : 'Tokyo / Kyoto';
         return `
-          <div class="editorial-card" style="margin-bottom:0; ${purchaseRec.bought ? 'border-color:var(--matcha);' : ''}">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
-              <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky);">${item.category}</span>
-              <span class="tabular" style="font-size:0.8rem; font-weight:800; color:var(--vermilion);">${item.budgetLimit}</span>
-            </div>
-            <h3 style="font-family:var(--font-serif); font-size:1.15rem; font-weight:800; margin-bottom:6px;">${item.title}</h3>
-            <div class="tabular" style="font-size:0.82rem; color:var(--matcha); font-weight:700; margin-bottom:4px;">${item.currentPrice}</div>
-            <div style="font-size:0.79rem; color:var(--text-secondary); margin-bottom:10px;"><strong>Önerilen Gün:</strong> ${item.suggestedDay}</div>
+          <div class="editorial-card shop-card-v2 ${purchaseRec.bought ? 'is-bought' : ''}" style="margin-bottom:0;">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
+                <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky);">${item.category}</span>
+                <span class="tabular" style="font-size:0.78rem; font-weight:800; color:var(--vermilion);">${item.budgetLimit}</span>
+              </div>
+              <h3 style="font-family:var(--font-serif); font-size:1.14rem; font-weight:800; margin-bottom:5px; line-height:1.25;">${item.title}</h3>
+              <div class="tabular" style="font-size:0.81rem; color:var(--matcha); font-weight:700; margin-bottom:6px;">${item.currentPrice}</div>
 
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
-              <button class="action-chip ${purchaseRec.bought ? 'map-place' : ''}" onclick="toggleShopPurchased('${item.id}')">
-                ${ico('check')} <span>${purchaseRec.bought ? 'Alındı' : 'Aldık İşaretle'}</span>
-              </button>
-              ${purchaseRec.bought ? `
-                <input type="number" class="search-input tabular" style="min-height:38px; padding:4px 10px; width:135px; font-size:16px;" placeholder="Ödenen ¥" value="${purchaseRec.paidJPY || ''}" onchange="updateShopPaid('${item.id}', this.value)">
-              ` : ''}
-            </div>
-
-            <div style="display:flex; gap:8px;">
-              <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="toggleShoppingDrawer('${item.id}')">
-                <span>${isOpen ? 'Özet ▴' : '10 Maddelik Kontrol & Sorular ▾'}</span>
-              </button>
-              <button class="action-chip" onclick="jumpToKasa('${item.id}')" title="Kasa Hakeminde Hesapla">
-                ${ico('card')} <span>Hesapla</span>
-              </button>
-            </div>
-
-            ${isOpen ? `
-              <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border-subtle); font-size:0.82rem; line-height:1.55; display:flex; flex-direction:column; gap:9px;">
-                <div style="background:var(--card-tint); border:1px solid var(--border-subtle); padding:10px 12px; border-radius:var(--radius-md);">
-                  <strong>1. Bize Uygun Ürün / Model:</strong><br>
-                  ${Array.isArray(item.suitableProduct) ? '• ' + prodText : prodText}
+              <div class="shop-quick-meta">
+                <div class="shop-meta-pill">
+                  <strong>Önerilen Gün</strong>
+                  <span>${item.suggestedDay.split('—')[0].split('.')[0]}</span>
                 </div>
-                <div><strong>2. Şehir &amp; Mağaza Şubeleri:</strong><br>${item.citiesAndShops.map(s => `• ${s}`).join('<br>')}</div>
-                <div><strong>5. Makul Alım Aralığı:</strong> ${item.reasonablePriceRange}</div>
-                <div><strong>6. Fiyat Kıyaslama Noktaları:</strong> ${item.comparisons}</div>
-                <div style="background:var(--card-tint); border:1px solid var(--border); padding:10px 12px; border-radius:var(--radius-md);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <strong>7. Tezgahta Fiziki Kontrol Listesi</strong>
-                    <span class="halal-verify-badge tabular">${checkedInsp}/${inspList.length}</span>
+                <div class="shop-meta-pill">
+                  <strong>İlk Adres Hedefi</strong>
+                  <span>${firstShop.trim().substring(0, 48)}${firstShop.trim().length > 48 ? '…' : ''}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                <button class="action-chip ${purchaseRec.bought ? 'map-place' : ''}" onclick="toggleShopPurchased('${item.id}')">
+                  ${ico('check')} <span>${purchaseRec.bought ? 'Alındı' : 'Aldık İşaretle'}</span>
+                </button>
+                ${purchaseRec.bought ? `
+                  <input type="number" class="search-input tabular" style="min-height:38px; padding:4px 10px; width:135px; font-size:16px;" placeholder="Ödenen ¥" value="${purchaseRec.paidJPY || ''}" onchange="updateShopPaid('${item.id}', this.value)">
+                ` : ''}
+              </div>
+
+              <div style="display:flex; gap:8px;">
+                <button class="action-chip map-route" style="flex:1; justify-content:center;" onclick="toggleShoppingDrawer('${item.id}')">
+                  <span>${isOpen ? 'Özet ▴' : 'Kontrol Listesi & İpuçları ▾'}</span>
+                </button>
+                <button class="action-chip" onclick="jumpToKasa('${item.id}')" title="Kasa Hakeminde Hesapla">
+                  ${ico('card')} <span>Hesapla</span>
+                </button>
+              </div>
+
+              ${isOpen ? `
+                <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border-subtle); font-size:0.82rem; line-height:1.55; display:flex; flex-direction:column; gap:9px;">
+                  <div style="background:var(--card-tint); border:1px solid var(--border-subtle); padding:10px 12px; border-radius:var(--radius-md);">
+                    <strong>1. Bize Uygun Ürün / Model:</strong><br>
+                    ${Array.isArray(item.suitableProduct) ? '• ' + prodText : prodText}
                   </div>
-                  ${inspList.map((insp, i) => {
-                    const key = `${item.id}-insp-${i}`;
-                    const c = !!appState.shopInspections[key];
-                    return `
-                      <label class="touch-check-row" for="${key}" style="min-height:38px; padding:4px 0; font-size:0.8rem;">
-                        <input type="checkbox" id="${key}" ${c ? 'checked' : ''} onchange="toggleShopInspection('${key}')" style="accent-color:var(--matcha);">
-                        <span style="${c ? 'text-decoration:line-through; opacity:0.6;' : ''}">${insp}</span>
-                      </label>
-                    `;
-                  }).join('')}
-                </div>
-                <div style="background:var(--vermilion-soft); border-left:3px solid var(--vermilion); padding:8px 10px; border-radius:0 8px 8px 0;">
-                  <strong>8. Garanti, Dil &amp; Bölge:</strong><br>${item.warrantyAndRegion}
-                </div>
-                <div>
-                  <strong>9. Satıcıya Sorulacak Sorular (Dokun → Göster):</strong>
-                  <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
-                    ${item.questionsToAsk.map(q => {
-                      const parts = q.split('(');
-                      const romajiPart = parts[0].trim();
-                      const trPart = parts[1] ? parts[1].replace(')', '').trim() : q;
+                  <div><strong>2. Şehir &amp; Mağaza Şubeleri:</strong><br>${item.citiesAndShops.map(s => `• ${s}`).join('<br>')}</div>
+                  <div><strong>5. Makul Alım Aralığı:</strong> ${item.reasonablePriceRange}</div>
+                  <div><strong>6. Fiyat Kıyaslama Noktaları:</strong> ${item.comparisons}</div>
+                  <div style="background:var(--card-tint); border:1px solid var(--border); padding:10px 12px; border-radius:var(--radius-md);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                      <strong>7. Tezgahta Fiziki Kontrol Listesi</strong>
+                      <span class="halal-verify-badge tabular">${checkedInsp}/${inspList.length}</span>
+                    </div>
+                    ${inspList.map((insp, i) => {
+                      const key = `${item.id}-insp-${i}`;
+                      const c = !!appState.shopInspections[key];
                       return `
-                        <button class="action-chip" style="justify-content:space-between; text-align:left;" onclick="openStaffModal('${escapeAttr(romajiPart)}', '${escapeAttr(romajiPart)}', '${escapeAttr(trPart)}')">
-                          <span>${q}</span>
-                          <span style="color:var(--vermilion); font-weight:800;">Göster</span>
-                        </button>
+                        <label class="touch-check-row" for="${key}" style="min-height:38px; padding:4px 0; font-size:0.8rem;">
+                          <input type="checkbox" id="${key}" ${c ? 'checked' : ''} onchange="toggleShopInspection('${key}')" style="accent-color:var(--matcha);">
+                          <span style="${c ? 'text-decoration:line-through; opacity:0.6;' : ''}">${insp}</span>
+                        </label>
                       `;
                     }).join('')}
                   </div>
+                  <div style="background:var(--vermilion-soft); border-left:3px solid var(--vermilion); padding:8px 10px; border-radius:0 8px 8px 0;">
+                    <strong>8. Garanti, Dil, Bagaj &amp; Kural:</strong><br>${item.warrantyAndRegion}
+                  </div>
+                  <div>
+                    <strong>9. Satıcıya Sorulacak Sorular (Dokun → Göster):</strong>
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px;">
+                      ${item.questionsToAsk.map(q => {
+                        const parts = q.split('(');
+                        const romajiPart = parts[0].trim();
+                        const trPart = parts[1] ? parts[1].replace(')', '').trim() : q;
+                        return `
+                          <button class="action-chip" style="justify-content:space-between; text-align:left;" onclick="openStaffModal('${escapeAttr(romajiPart)}', '${escapeAttr(romajiPart)}', '${escapeAttr(trPart)}')">
+                            <span>${q}</span>
+                            <span style="color:var(--vermilion); font-weight:800;">Göster</span>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                  <div style="color:var(--text-muted); font-size:0.79rem;">
+                    <strong>10. Ne Zaman Ertelemeli:</strong> ${item.whenToPostpone}
+                  </div>
                 </div>
-                <div style="color:var(--text-muted); font-size:0.79rem;">
-                  <strong>10. Ne Zaman Ertelemeli:</strong> ${item.whenToPostpone}
-                </div>
-              </div>
-            ` : ''}
+              ` : ''}
+            </div>
           </div>
         `;
       }).join('')}
     </div>
+
+    ${storeMatrixHtml}
   `;
 }
 
@@ -1783,8 +1851,26 @@ function jumpToKasa(itemId) {
   renderShopping();
   const sel = document.getElementById('kasa-cat');
   const priceEl = document.getElementById('kasa-price');
-  const defaults = { fujifilm: 177920, watch: 150000, ps5: 79980, 'vintage-clothing': 18000, luggage: 32900 };
-  if (sel) sel.value = (itemId === 'vintage-clothing' || itemId === 'luggage') ? 'luggage' : itemId;
+  const defaults = {
+    fujifilm: 177920,
+    'camera-accessories': 40000,
+    watch: 150000,
+    ps5: 79980,
+    'vintage-clothing': 18000,
+    'apparel-sneakers': 25000,
+    'skincare-drugstore': 15000,
+    'matcha-tea-sweets': 12000,
+    'stationery-craft': 20000,
+    'crafts-coupons': 15000,
+    luggage: 32900
+  };
+  const catMap = {
+    fujifilm: 'fujifilm',
+    'camera-accessories': 'fujifilm',
+    watch: 'watch',
+    ps5: 'ps5'
+  };
+  if (sel) sel.value = catMap[itemId] || 'luggage';
   if (priceEl && defaults[itemId]) priceEl.value = defaults[itemId];
   recalcKasaHakemi();
 }
@@ -1797,12 +1883,13 @@ function recalcKasaHakemi() {
   const out = document.getElementById('kasa-result');
   if (!out) return;
 
+  const fx = getFxRate();
   const caps = { fujifilm: 180000, watch: 225000, ps5: 82500, luggage: 187500 };
   const capWarn = {
     fujifilm: 'Ekranda İngilizce menü + Uluslararası garanti kartını kasada bizzat kontrol edin.',
     watch: 'Nakano Jackroad & Kame-Kichi arasında fiyat kıyaslayın; zaman tutma testi isteyin.',
     ps5: 'KUTU KODUNUN CFI-2000 OLDUĞUNU TEYİT EDİN! CFI-2200 yalnızca Japonca/Japon PSN kilitlidir.',
-    luggage: 'Boş ağırlık 4.5 kg altı ve Hinomoto frenli tekerlek olmalı (Lojel ~38k / Muji ~33k).'
+    luggage: 'Boş ağırlık 4.5 kg altı olmalı. Kozmetik/gıda sarf malzemeleri mühürlü poşette kalmalı ve check-in valize konmalıdır.'
   };
 
   const afterCoupon = hasCoupon ? Math.round(rawPrice * 0.95) : rawPrice;
@@ -1816,7 +1903,7 @@ function recalcKasaHakemi() {
     <div class="kasa-grid">
       <div class="kasa-metric">
         <span style="color:var(--text-muted); display:block;">KASADA ÖDENECEK</span>
-        <strong class="tabular" style="font-size:1.06rem; color:var(--vermilion);">¥${afterCoupon.toLocaleString()} ($${Math.round(afterCoupon / 150)})</strong>
+        <strong class="tabular" style="font-size:1.06rem; color:var(--vermilion);">¥${afterCoupon.toLocaleString()} ($${Math.round(afterCoupon / fx)})</strong>
       </div>
       <div class="kasa-metric">
         <span style="color:var(--text-muted); display:block;">HANEDA İADESİ (DÖNÜŞ)</span>
@@ -1824,7 +1911,7 @@ function recalcKasaHakemi() {
       </div>
     </div>
     <div style="margin-top:8px; padding:10px 12px; border-radius:var(--radius-md); background:${overCap ? 'var(--vermilion-soft)' : 'var(--matcha-soft)'}; font-size:0.82rem;">
-      <div class="tabular"><strong>Gerçek Net Maliyet (İade Sonrası):</strong> ¥${netCost.toLocaleString()} (~$${Math.round(netCost / 150)})</div>
+      <div class="tabular"><strong>Gerçek Net Maliyet (İade Sonrası):</strong> ¥${netCost.toLocaleString()} (~$${Math.round(netCost / fx)})</div>
       <div style="margin-top:4px; color:${overCap ? 'var(--vermilion)' : 'var(--matcha)'}; font-weight:800;">
         ${overCap ? `Kategori limiti (¥${capJPY.toLocaleString()}) AŞILIYOR — indirim/ikinci el bakın.` : `Kategori bütçesi (¥${capJPY.toLocaleString()}) içinde uygun.`}
       </div>
