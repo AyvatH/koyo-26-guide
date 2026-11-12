@@ -4478,18 +4478,270 @@ function renderBrandThumbSvg(item, kind) {
   `;
 }
 
+let currentAssistantTab = 'search'; // 'search' | 'chat'
+let currentOmniFilter = 'all';      // 'all' | 'days' | 'stops' | 'halal' | 'market' | 'shop' | 'tix' | 'acc'
+let currentOmniQuery = '';
+
 let aiChatMessages = [
   {
     role: 'bot',
-    html: 'Merhaba! Ben <strong>Japonya 2026 Asistanın</strong>. İnternetsiz bile uygulamada doğrudan işlem yapabilirim.<br>Örnek: <em>"Bütçeye 3500 yen yemek ekle"</em>, <em>"Bugün yağmur yağıyor"</em>, <em>"Kawaguchiko otobüsümüz kaçta?"</em>, <em>"Öğle yemeğini değiştir"</em> veya <em>"Otomattan ne içeyim?"</em>'
+    html: 'Merhaba! Ben <strong>Japonya 2026 Asistanın</strong>. İnternetsiz bile uygulamada doğrudan arama yapabilir ve işlem gerçekleştirebilirim.<br>Örnek: <em>"26 kasım"</em>, <em>"fuji"</em>, <em>"helal ramen"</em>, <em>"bütçeye 3500 yen ekle"</em>, <em>"yağmur yağıyor"</em> veya <em>"otomat içecekleri"</em>'
   }
 ];
+
+function normalizeOmniText(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/â/g, 'a')
+    .replace(/î/g, 'i')
+    .replace(/û/g, 'u')
+    .replace(/[\.,\/#!$%\^&\*;:{}=\-_'~`()'"?]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseDateIntent(query) {
+  if (!query) return null;
+  const q = String(query).toLowerCase();
+  const m = q.match(/(?:^|\D)(2[1-9]|30|[1-9]|1[0-2])\s*(kas[ıi]m|kas|aral[ıi]k|ara)(?:\D|$)/);
+  if (m) {
+    const dayNum = parseInt(m[1], 10);
+    const monthNum = m[2].startsWith('kas') ? '11' : '12';
+    const dd = dayNum < 10 ? '0' + dayNum : '' + dayNum;
+    return `2026-${monthNum}-${dd}`;
+  }
+  return null;
+}
+
+function formatDateForSearch(dStr) {
+  if (!dStr) return '';
+  const parts = dStr.split('-');
+  if (parts.length !== 3) return dStr;
+  const d = String(parseInt(parts[2], 10));
+  const m = parts[1];
+  const mTr = m === '11' ? 'kasım kasim kas' : 'aralık aralik ara';
+  return `${d} ${mTr} ${dStr} ${d}.${m}`;
+}
+
+const staticFlightRecords = [
+  {
+    trainName: 'QATAR AIRWAYS QR 633 & QR 812',
+    operator: 'Qatar Airways (Gidiş Uçuşu)',
+    depStation: 'İslamabad (ISB 03:20)',
+    arrStation: 'Tokyo Haneda (HND T3 22:55)',
+    date: '21 Kasım 2026 Cumartesi (Gün 0)',
+    time: '03:20 ISB → 05:05 DOH (QR633) • 07:25 DOH → 22:55 HND (QR812)',
+    seat: 'Ekonomi • 25 kg Bagaj • 2s 20dk Doha Aktarması',
+    pnr: 'ISB-DOH-HND'
+  },
+  {
+    trainName: 'THAI AIRWAYS TG 683 & TG 349',
+    operator: 'Thai Airways (Dönüş Uçuşu)',
+    depStation: 'Tokyo Haneda (HND T3 10:35)',
+    arrStation: 'İslamabad (ISB 22:20)',
+    date: '12 Aralık 2026 Cumartesi (Gün 21)',
+    time: '10:35 HND → 15:40 BKK (TG683) • 18:45 BKK → 22:20 ISB (TG349)',
+    seat: 'Koltuk 44B / 40J • 2 Parça Valiz • MOML Helal Yemek',
+    pnr: 'HND-BKK-ISB'
+  }
+];
+
+function performOmniSearch(rawQuery) {
+  const qNorm = normalizeOmniText(rawQuery);
+  const stopWords = ['ne', 'yapıyoruz', 'yapiyoruz', 'var', 'nerede', 'nasil', 'nasıl', 'gideriz', 'lutfen', 'lütfen', 'mi', 'mı', 'mu', 'mü', 'hey', 'selam', 'merhaba'];
+  let tokens = qNorm.split(' ').filter(t => t.length > 0 && !stopWords.includes(t));
+  if (!tokens.length) {
+    const rawTokens = qNorm.split(' ').filter(t => t.length > 0);
+    if (!rawTokens.length) return null;
+    tokens = rawTokens;
+  }
+
+  const results = {
+    exactDateDay: null,
+    action: null,
+    days: [],
+    stops: [],
+    halal: [],
+    market: [],
+    shop: [],
+    tix: [],
+    acc: []
+  };
+
+  // 1. Date intent
+  const dateIso = parseDateIntent(rawQuery);
+  if (dateIso) {
+    const dIdx = itineraryData.findIndex(d => d.date === dateIso);
+    if (dIdx !== -1) {
+      results.exactDateDay = { idx: dIdx, day: itineraryData[dIdx] };
+    }
+  }
+
+  // 2. Smart action intent
+  const expMatch = rawQuery.match(/(\d[\d\.,]*)\s*(?:yen|jpy|¥)/i) || (qNorm.includes('ekle') && rawQuery.match(/(\d{3,6})/));
+  if ((qNorm.includes('butce') || qNorm.includes('harcama') || qNorm.includes('ekle')) && expMatch) {
+    const amt = parseInt(expMatch[1].replace(/[^\d]/g, ''), 10);
+    if (amt > 0) {
+      results.action = { type: 'expense', amount: amt, label: `¥${amt.toLocaleString()} Harcamayı Bütçeye Ekle` };
+    }
+  } else if (qNorm.includes('yagmur') || qNorm.includes('islan')) {
+    results.action = { type: 'rain', label: 'Bugün için Yağmur Modunu Aç' };
+  } else if (qNorm.includes('yorulduk') || qNorm.includes('hafiflet')) {
+    results.action = { type: 'lighten', label: 'Bugünü Hafifletme Modunu Aç' };
+  }
+
+  // 3. Days
+  itineraryData.forEach((d, idx) => {
+    if (results.exactDateDay && results.exactDateDay.idx === idx) return;
+    const dateFmt = formatDateForSearch(d.date);
+    const dHay = normalizeOmniText(`${d.title} ${dateFmt} ${d.dayName || ''} ${d.city} ${d.autumnVibe || ''} ${d.summary || ''}`);
+    if (tokens.every(t => dHay.includes(t))) {
+      results.days.push({ idx, date: d.date, dayName: d.dayName, title: d.title, city: d.city, stopsCount: (d.stops || []).length, vibe: d.autumnVibe });
+    }
+  });
+
+  // 4. Stops
+  itineraryData.forEach((d, dIdx) => {
+    if (results.exactDateDay && results.exactDateDay.idx !== dIdx) return;
+    (d.stops || []).forEach((s, sIdx) => {
+      const dateFmt = formatDateForSearch(d.date);
+      const sHay = normalizeOmniText(`${s.name} ${s.details || ''} ${s.whyForUs || ''} ${s.badgeText || ''} ${d.city} ${dateFmt}`);
+      if (tokens.every(t => sHay.includes(t))) {
+        results.stops.push({
+          dIdx,
+          sIdx,
+          name: s.name,
+          time: s.time,
+          date: d.date,
+          dayName: d.dayName,
+          city: d.city,
+          details: s.details,
+          badge: s.badgeText,
+          mapsQuery: s.mapsQuery || s.name
+        });
+      }
+    });
+  });
+
+  // 5. Halal Dining
+  (halalData.halalDirectory || []).forEach(r => {
+    const rHay = normalizeOmniText(`${r.name} ${r.city} ${r.area} ${r.cuisine} ${r.mustTry || ''} ${r.whyGreat || ''} ${r.halalStatus}`);
+    if (tokens.every(t => rHay.includes(t))) {
+      results.halal.push({
+        name: r.name,
+        city: r.city,
+        area: r.area,
+        cuisine: r.cuisine,
+        price: r.priceRange,
+        status: r.halalStatus,
+        mustTry: r.mustTry,
+        prayer: r.prayerRoom,
+        whyGreat: r.whyGreat,
+        mapsQuery: r.mapsQuery || r.name
+      });
+    }
+  });
+
+  // 6. Market Brands
+  (halalData.vendingDrinks || []).forEach(vd => {
+    const vHay = normalizeOmniText(`${vd.brand} ${vd.product} ${vd.jpName} ${vd.temp} ${vd.category} ${vd.whyPick || ''} ${vd.halalCheck || ''}`);
+    if (tokens.every(t => vHay.includes(t))) {
+      results.market.push({
+        type: 'drink',
+        brand: vd.brand,
+        name: vd.product,
+        jp: vd.jpName,
+        temp: vd.temp,
+        price: vd.price,
+        check: vd.halalCheck,
+        why: vd.whyPick,
+        img: vd.imageUrl
+      });
+    }
+  });
+  (halalData.brandSnacks || []).forEach(bs => {
+    const bHay = normalizeOmniText(`${bs.brand} ${bs.product} ${bs.jpName} ${bs.where} ${bs.category} ${bs.halalCheck || ''} ${bs.avoidVariant || ''}`);
+    if (tokens.every(t => bHay.includes(t))) {
+      results.market.push({
+        type: 'snack',
+        brand: bs.brand,
+        name: bs.product,
+        jp: bs.jpName,
+        where: bs.where,
+        price: bs.price,
+        check: bs.halalCheck,
+        avoid: bs.avoidVariant,
+        img: bs.imageUrl
+      });
+    }
+  });
+
+  // 7. Shopping
+  (shoppingData || []).forEach(sh => {
+    const shHay = normalizeOmniText(`${sh.title} ${sh.category} ${(sh.suitableProduct || '')} ${(sh.citiesAndShops || []).join(' ')} ${sh.budgetLimit || ''}`);
+    if (tokens.every(t => shHay.includes(t))) {
+      results.shop.push({
+        title: sh.title,
+        cat: sh.category,
+        price: sh.reasonablePriceRange,
+        shops: sh.citiesAndShops,
+        budget: sh.budgetLimit
+      });
+    }
+  });
+
+  // 8. Tickets & Flights
+  const allTickets = (bookedTicketsData || []).concat(staticFlightRecords);
+  allTickets.forEach(tk => {
+    const tkHay = normalizeOmniText(`${tk.trainName} ${tk.operator} ${tk.depStation} ${tk.arrStation} ${tk.date} ${tk.seat || ''} ${tk.pnr || ''} ${tk.ticketNo || ''}`);
+    if (tokens.every(t => tkHay.includes(t))) {
+      results.tix.push({
+        name: tk.trainName,
+        operator: tk.operator,
+        date: tk.date,
+        route: `${tk.depStation} → ${tk.arrStation}`,
+        time: tk.time || `${tk.depTime || ''} - ${tk.arrTime || ''}`,
+        seat: tk.seat,
+        pnr: tk.pnr
+      });
+    }
+  });
+
+  // 9. Accommodations
+  (accommodationsData || []).forEach(ac => {
+    const acHay = normalizeOmniText(`${ac.name} ${ac.city} ${ac.addressEn} ${ac.addressJp} ${ac.station || ''} ${ac.notes || ''} ${ac.dates}`);
+    if (tokens.every(t => acHay.includes(t))) {
+      results.acc.push({
+        name: ac.name,
+        city: ac.city,
+        dates: ac.dates,
+        address: ac.addressEn,
+        addressJp: ac.addressJp,
+        station: ac.station,
+        mapsQuery: ac.mapsQuery || ac.addressEn
+      });
+    }
+  });
+
+  return results;
+}
 
 function openAiAssistantModal() {
   const modal = document.getElementById('ai-modal');
   if (!modal) return;
   renderAiModalBody();
   modal.classList.add('open');
+  setTimeout(() => {
+    const el = document.getElementById('ai-omni-input');
+    if (el) el.focus();
+  }, 120);
 }
 
 function closeAiAssistantModal() {
@@ -4497,46 +4749,433 @@ function closeAiAssistantModal() {
   if (modal) modal.classList.remove('open');
 }
 
+function switchAssistantTab(tab) {
+  currentAssistantTab = tab;
+  renderAiModalBody();
+  if (tab === 'search') {
+    setTimeout(() => {
+      const el = document.getElementById('ai-omni-input');
+      if (el) el.focus();
+    }, 80);
+  }
+}
+
+function setOmniFilter(cat) {
+  currentOmniFilter = cat;
+  updateOmniView();
+}
+
+function handleOmniSearchInput(val) {
+  currentOmniQuery = val;
+  const clr = document.getElementById('omni-clear-btn');
+  if (clr) clr.style.display = val && val.trim() ? 'inline-flex' : 'none';
+  updateOmniView();
+}
+
+function clearOmniSearch() {
+  currentOmniQuery = '';
+  const inp = document.getElementById('ai-omni-input');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+  }
+  const clr = document.getElementById('omni-clear-btn');
+  if (clr) clr.style.display = 'none';
+  updateOmniView();
+}
+
+function setOmniQuickQuery(q) {
+  currentOmniQuery = q;
+  const inp = document.getElementById('ai-omni-input');
+  if (inp) inp.value = q;
+  const clr = document.getElementById('omni-clear-btn');
+  if (clr) clr.style.display = 'inline-flex';
+  updateOmniView();
+}
+
+function executeOmniAction(type, p1, p2) {
+  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+  if (type === 'expense') {
+    const amt = Number(p1) || 0;
+    if (!appState.expenses) appState.expenses = [];
+    appState.expenses.unshift({
+      id: 'ai-' + Date.now(),
+      title: p2 || 'Hızlı Harcama',
+      category: 'Yeme - İçme & Günlük Market',
+      amountJPY: amt,
+      date: curDay ? curDay.date : '2026-11-21',
+      entryType: 'actual'
+    });
+    saveMasterState();
+    renderBudget();
+    showToast(`¥${amt.toLocaleString()} bütçeye eklendi!`);
+    updateOmniView();
+  } else if (type === 'rain') {
+    if (!appState.dayModes[curDay.id]) appState.dayModes[curDay.id] = { lighten: false, rain: false };
+    appState.dayModes[curDay.id].rain = true;
+    saveMasterState();
+    renderDay(currentDayIndex);
+    showToast(`Gün ${currentDayIndex + 1} için Yağmur Modu açıldı`);
+    updateOmniView();
+  } else if (type === 'lighten') {
+    if (!appState.dayModes[curDay.id]) appState.dayModes[curDay.id] = { lighten: false, rain: false };
+    appState.dayModes[curDay.id].lighten = true;
+    saveMasterState();
+    renderDay(currentDayIndex);
+    showToast(`Gün ${currentDayIndex + 1} Hafifletme Modu açıldı`);
+    updateOmniView();
+  } else if (type === 'jump') {
+    closeAiAssistantModal();
+    selectDay(Number(p1) || 0);
+    switchTab('itinerary');
+  }
+}
+
+function renderOmniSearchResults(results, query) {
+  if (!results) return '';
+  const tokens = normalizeOmniText(query).split(' ').filter(t => t.length > 0);
+  const totalCount = (results.days.length + results.stops.length + results.halal.length + results.market.length + results.shop.length + results.tix.length + results.acc.length) + (results.exactDateDay ? 1 : 0);
+
+  if (totalCount === 0 && !results.action) {
+    return `
+      <div class="omni-empty-box">
+        <div style="font-size:2rem; margin-bottom:6px;">🔍</div>
+        <strong style="color:var(--text-main); font-size:0.95rem;">"${escapeHtml(query)}" ile eşleşen sonuç bulunamadı</strong>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin:6px 0 14px 0;">Farklı bir kelime deneyebilir veya aşağıdaki hızlı konulardan birine dokunabilirsiniz:</p>
+        <div class="ai-quick-row" style="justify-content:center;">
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('25 Kasım Fuji')">📅 25 Kasım Fuji</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('26 Kasım Asakusa')">📅 26 Kasım Asakusa</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Helal Ramen')">🍜 Helal Ramen</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Otomat İçecekleri')">🥤 Otomat</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Don Quijote')">🛍️ Donki</button>
+        </div>
+      </div>
+    `;
+  }
+
+  let html = '';
+
+  // Smart action banner
+  if (results.action) {
+    const act = results.action;
+    html += `
+      <div class="omni-quick-action-banner">
+        <div>
+          <span style="font-size:0.7rem; font-weight:900; color:var(--sky); letter-spacing:0.04em; display:block;">⚡ AKILLI KOMUT ALGILANDI</span>
+          <strong style="font-size:0.92rem; color:var(--text-main);">${escapeHtml(act.label)}</strong>
+        </div>
+        <button class="action-chip map-route" onclick="executeOmniAction('${act.type}', ${act.amount || 0}, '${escapeAttr(query)}')">Hemen Uygula</button>
+      </div>
+    `;
+  }
+
+  // Exact Date Day card pinned at top
+  if (results.exactDateDay) {
+    const d = results.exactDateDay.day;
+    const dIdx = results.exactDateDay.idx;
+    const stopsList = (d.stops || []).slice(0, 5).map(s => `• <strong>${s.time}</strong> ${s.name}`).join('<br>');
+    const lunchName = (d.lunchOptions && d.lunchOptions[0]) ? d.lunchOptions[0].name : '';
+    const dinnerName = (d.dinnerOptions && d.dinnerOptions[0]) ? d.dinnerOptions[0].name : '';
+
+    html += `
+      <div class="omni-card is-day" style="background:var(--card); border:2px solid var(--vermilion); box-shadow:var(--shadow-md);">
+        <div class="omni-card-top">
+          <span class="hero-badge" style="background:var(--vermilion); color:#fff; font-size:0.68rem;">🎯 TAM TARİH EŞLEŞMESİ</span>
+          <span class="tabular" style="font-size:0.75rem; font-weight:800; color:var(--vermilion);">GÜN ${dIdx + 1}</span>
+        </div>
+        <div class="omni-card-title" style="font-size:1.02rem; margin:4px 0;">${d.date} ${d.dayName} — ${d.city}: ${d.title}</div>
+        <div class="omni-card-desc" style="font-size:0.8rem; margin:6px 0;">
+          ${stopsList}
+          ${lunchName ? `<div style="margin-top:4px; color:var(--matcha);">🍽️ <strong>Öğle:</strong> ${lunchName}</div>` : ''}
+          ${dinnerName ? `<div style="color:var(--matcha);">🌙 <strong>Akşam:</strong> ${dinnerName}</div>` : ''}
+        </div>
+        <div class="omni-card-actions">
+          <button class="action-chip map-route" onclick="executeOmniAction('jump', ${dIdx})">📅 Bu Güne Git</button>
+          <a href="${buildPlaceUrl(d.city)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Haritada Aç</a>
+        </div>
+      </div>
+    `;
+  }
+
+  // Filter pills
+  const filters = [
+    { id: 'all', label: `Tümü (${totalCount})` },
+    { id: 'days', label: `📅 Günler (${results.days.length})`, count: results.days.length },
+    { id: 'stops', label: `📍 Duraklar (${results.stops.length})`, count: results.stops.length },
+    { id: 'halal', label: `🍽️ Helal (${results.halal.length})`, count: results.halal.length },
+    { id: 'market', label: `🥤 Otomat & Market (${results.market.length})`, count: results.market.length },
+    { id: 'shop', label: `🛍️ Alışveriş (${results.shop.length})`, count: results.shop.length },
+    { id: 'tix', label: `🎫 Biletler (${results.tix.length})`, count: results.tix.length },
+    { id: 'acc', label: `🏠 Konaklama (${results.acc.length})`, count: results.acc.length }
+  ].filter(f => f.id === 'all' || f.count > 0);
+
+  html += `
+    <div class="pill-filter-row" style="margin-bottom:10px;">
+      ${filters.map(f => `<button class="filter-pill-btn ${currentOmniFilter === f.id ? 'active' : ''}" onclick="setOmniFilter('${f.id}')">${f.label}</button>`).join('')}
+    </div>
+  `;
+
+  // Render grouped sections
+  const showAll = currentOmniFilter === 'all';
+
+  // 1. Days
+  if ((showAll || currentOmniFilter === 'days') && results.days.length) {
+    html += `<div class="omni-group-title">📅 ROTA GÜNLERİ (${results.days.length})</div>`;
+    results.days.slice(0, 5).forEach(d => {
+      html += `
+        <div class="omni-card is-day">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">Gün ${d.idx + 1} (${d.date.slice(5)}) — ${d.city}</strong>
+            <span class="stop-cat-tag">${d.stopsCount} Durak</span>
+          </div>
+          <div class="omni-card-meta">${d.dayName} • ${d.vibe || ''}</div>
+          <p class="omni-card-desc">${d.title}</p>
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="executeOmniAction('jump', ${d.idx})">📅 Güne Git</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 2. Stops
+  if ((showAll || currentOmniFilter === 'stops') && results.stops.length) {
+    html += `<div class="omni-group-title">📍 GEZİLECEK YERLER &amp; DURAKLAR (${results.stops.length})</div>`;
+    results.stops.slice(0, 8).forEach(s => {
+      html += `
+        <div class="omni-card is-stop">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${s.name}</strong>
+            <span class="stop-cat-tag">${s.time}</span>
+          </div>
+          <div class="omni-card-meta">Gün ${s.dIdx + 1} (${s.date.slice(5)} ${s.dayName || ''}) • ${s.city}</div>
+          <p class="omni-card-desc">${s.details ? s.details.slice(0, 110) + '...' : ''}</p>
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="executeOmniAction('jump', ${s.dIdx})">📅 Güne Git</button>
+            <a href="${buildPlaceUrl(s.mapsQuery || s.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Konum</a>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 3. Halal Dining
+  if ((showAll || currentOmniFilter === 'halal') && results.halal.length) {
+    html += `<div class="omni-group-title">🍽️ HELAL RESTORANLAR &amp; YEMEK (${results.halal.length})</div>`;
+    results.halal.slice(0, 6).forEach(r => {
+      html += `
+        <div class="omni-card is-halal">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${r.name}</strong>
+            <span class="halal-verify-badge">${r.status || 'Helal'}</span>
+          </div>
+          <div class="omni-card-meta">${r.city} • ${r.area} • ${r.cuisine} ${r.prayer ? '• 🕌 Mescit Var' : ''}</div>
+          <p class="omni-card-desc"><strong>Ne Yenir:</strong> ${r.mustTry || r.whyGreat || ''}</p>
+          <div class="omni-card-actions">
+            <a href="${buildPlaceUrl(r.mapsQuery || r.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Haritada Aç</a>
+            <button class="action-chip map-route" onclick="closeAiAssistantModal(); currentHalalSubtab='restaurants'; switchTab('halal');">🍽️ Helal Menüsü</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 4. Market Brands
+  if ((showAll || currentOmniFilter === 'market') && results.market.length) {
+    html += `<div class="omni-group-title">🥤 OTOMAT &amp; MARKET ÜRÜNLERİ (${results.market.length})</div>`;
+    results.market.slice(0, 6).forEach(m => {
+      const gImgUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(m.brand + ' ' + m.jp + ' ' + m.name);
+      html += `
+        <div class="omni-card is-market">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${m.product || m.name} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">(${m.brand})</span></strong>
+            <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${m.price || ''}</span>
+          </div>
+          <div class="omni-card-meta">${m.jp || ''} ${m.temp ? '• ' + m.temp : ''} ${m.where ? '• ' + m.where : ''}</div>
+          <p class="omni-card-desc">✔ ${m.check || m.why || ''}</p>
+          ${m.avoid ? `<div style="font-size:0.74rem; color:var(--vermilion); margin-bottom:6px;">⚠️ <strong>Kaçın:</strong> ${m.avoid}</div>` : ''}
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="closeAiAssistantModal(); currentHalalSubtab='brands'; switchTab('halal');">🛒 Markalarda Gör</button>
+            <a href="${gImgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📷 Fotoğraf</a>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 5. Shopping
+  if ((showAll || currentOmniFilter === 'shop') && results.shop.length) {
+    html += `<div class="omni-group-title">🛍️ ALIŞVERİŞ &amp; MAĞAZALAR (${results.shop.length})</div>`;
+    results.shop.slice(0, 5).forEach(s => {
+      html += `
+        <div class="omni-card is-shop">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${s.title}</strong>
+            <span class="price-verify-badge">${s.cat}</span>
+          </div>
+          <div class="omni-card-meta">${(s.shops || []).slice(0, 2).join(' • ')}</div>
+          <p class="omni-card-desc">${s.price || s.budget || ''}</p>
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="closeAiAssistantModal(); switchTab('shopping');">🛍️ Alışverişte Gör</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 6. Tickets & Flights
+  if ((showAll || currentOmniFilter === 'tix') && results.tix.length) {
+    html += `<div class="omni-group-title">🎫 ALINMIŞ BİLETLER &amp; SEFERLER (${results.tix.length})</div>`;
+    results.tix.forEach(t => {
+      html += `
+        <div class="omni-card is-ticket">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${t.name}</strong>
+            <span class="halal-verify-badge">BİLET</span>
+          </div>
+          <div class="omni-card-meta">${t.date} • ${t.route}</div>
+          <p class="omni-card-desc"><strong>Saat:</strong> ${t.time} ${t.seat ? '• <strong>Koltuk:</strong> ' + t.seat : ''}</p>
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="closeAiAssistantModal(); openWalletModal();">🎫 Cüzdanımda Aç</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // 7. Accommodations
+  if ((showAll || currentOmniFilter === 'acc') && results.acc.length) {
+    html += `<div class="omni-group-title">🏠 KONAKLAMA &amp; EV BİLGİSİ (${results.acc.length})</div>`;
+    results.acc.forEach(a => {
+      html += `
+        <div class="omni-card is-acc">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${a.name}</strong>
+            <span class="stop-cat-tag">${a.dates}</span>
+          </div>
+          <div class="omni-card-meta">${a.city} • En Yakın: ${a.station || ''}</div>
+          <p class="omni-card-desc">${a.address}</p>
+          <div class="omni-card-actions">
+            <a href="${buildPlaceUrl(a.mapsQuery || a.address)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Harita</a>
+            ${a.addressJp ? `<button class="action-chip" onclick="closeAiAssistantModal(); openStaffModal('${escapeAttr(a.addressJp)}', '${escapeAttr(a.address)}', '${escapeAttr(a.name)}');">🚕 Taksi Kartı</button>` : ''}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  return html;
+}
+
+function updateOmniView() {
+  const container = document.getElementById('omni-results-container');
+  if (!container) return;
+  const q = (currentOmniQuery || '').trim();
+
+  if (!q) {
+    const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+    container.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <span class="section-eyebrow" style="color:var(--text-muted); margin-bottom:6px;">🔥 Popüler &amp; Hızlı Aramalar</span>
+        <div class="ai-quick-row">
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('25 Kasım Fuji')">📅 25 Kasım Fuji</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('26 Kasım Asakusa')">📅 26 Kasım Asakusa</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('4 Aralık Sagano')">📅 4 Aralık Sagano</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('7 Aralık Nara')">📅 7 Aralık Nara</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kawaguchiko Otobüs')">🚌 Fuji Otobüsü</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Helal Ramen')">🍜 Helal Ramen</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Otomat İçecekleri')">🥤 Otomat</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Don Quijote')">🛍️ Donki</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Takadanobaba')">🏠 Evimiz</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Uçuş')">✈️ Uçuşlar</button>
+        </div>
+      </div>
+
+      <div class="omni-card is-day" style="border-left:4px solid var(--sky);">
+        <div class="omni-card-top">
+          <strong class="omni-card-title">📍 Şu Anki Gün: Gün ${currentDayIndex + 1} (${curDay.date})</strong>
+          <span class="stop-cat-tag">${curDay.city}</span>
+        </div>
+        <p class="omni-card-desc" style="margin:4px 0 8px 0;">${curDay.title}</p>
+        <div class="omni-card-actions">
+          <button class="action-chip map-route" onclick="executeOmniAction('jump', ${currentDayIndex})">📅 Bu Güne Git</button>
+          <button class="action-chip swap-pill-btn" onclick="closeAiAssistantModal(); openMealSwapModal('${curDay.id}', 'lunch');">🍽️ Öğle Değiştir</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const res = performOmniSearch(q);
+  container.innerHTML = renderOmniSearchResults(res, q);
+}
+
 function renderAiModalBody() {
   const body = document.getElementById('ai-modal-body');
   if (!body) return;
   const hasKey = !!(appState.geminiApiKey && appState.geminiApiKey.trim());
-  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
 
   body.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:0.75rem; color:var(--text-muted);">
-      <span>Aktif Gün: <strong>Gün ${currentDayIndex + 1} (${curDay ? curDay.city : ''})</strong></span>
-      <span class="halal-verify-badge">${hasKey ? '✨ Gemini API + Offline' : '⚡ Çevrimdışı Akıllı Mod'}</span>
-    </div>
-
-    <div class="ai-quick-row">
-      <button class="ai-quick-chip" onclick="sendAiQuick('Kawaguchiko otobüsümüz kaçta?')">🚌 Otobüs Saati</button>
-      <button class="ai-quick-chip" onclick="sendAiQuick('Bugün yağmur yağıyor')">☔ Yağmur Modu</button>
-      <button class="ai-quick-chip" onclick="sendAiQuick('Öğle yemeğini değiştir')">🍽️ Öğün Değiştir</button>
-      <button class="ai-quick-chip" onclick="sendAiQuick('Otomattan ne içebilirim?')">🥤 Otomat</button>
-      <button class="ai-quick-chip" onclick="sendAiQuick('Bütçeye 2500 yen yemek ekle')">💴 +2.500¥ Ekle</button>
-    </div>
-
-    <div class="ai-chat-log" id="ai-chat-log">
-      ${aiChatMessages.map(m => `<div class="ai-msg ${m.role}">${m.html}</div>`).join('')}
-    </div>
-
-    <div class="ai-input-row">
-      <input type="text" id="ai-input" class="search-input" style="flex:1; padding:9px 12px;" placeholder="Örn: Kyoto helal yemek bul, bütçeye 3000 yen ekle..." onkeydown="if(event.key==='Enter')sendAiMessage()">
-      <button class="hdr-btn hdr-primary" onclick="sendAiMessage()">Gönder</button>
-    </div>
-
-    <details class="ai-settings-box">
-      <summary style="cursor:pointer; font-weight:700; color:var(--text-secondary);">⚙️ İsteğe Bağlı: Gerçek Gemini API Anahtarı Bağla</summary>
-      <p style="margin:6px 0; color:var(--text-muted);">Anahtar yalnızca bu telefonun tarayıcısında (localStorage) saklanır; girmezseniz çevrimdışı asistan çalışmaya devam eder.</p>
-      <div style="display:flex; gap:6px;">
-        <input type="password" id="ai-key-input" class="search-input" style="flex:1; padding:6px 10px;" placeholder="AIza..." value="${escapeAttr(appState.geminiApiKey || '')}">
-        <button class="action-chip map-route" onclick="saveGeminiApiKey()">Kaydet</button>
+    <!-- OMNI SEARCH BAR -->
+    <div class="omni-search-bar-wrap">
+      <div class="omni-input-box">
+        <span class="omni-search-icon">🔍</span>
+        <input type="search" id="ai-omni-input" class="omni-input-el"
+               placeholder="Rota, durak, helal yemek, otomat, bilet ara... (Örn: 26 kasım, fuji, ramen)"
+               value="${escapeAttr(currentOmniQuery)}"
+               autocomplete="off" autocapitalize="off" spellcheck="false"
+               oninput="handleOmniSearchInput(this.value)">
+        <button id="omni-clear-btn" class="omni-clear-btn" onclick="clearOmniSearch()" style="display:${currentOmniQuery ? 'inline-flex' : 'none'};" aria-label="Temizle">✕</button>
       </div>
-    </details>
+    </div>
+
+    <!-- TABS: ARAMA MOTORU vs CHAT -->
+    <div class="subtab-seg" style="margin:8px 0 10px 0;">
+      <button class="subtab-seg-btn ${currentAssistantTab === 'search' ? 'active' : ''}" onclick="switchAssistantTab('search')">🔍 Anlık Arama</button>
+      <button class="subtab-seg-btn ${currentAssistantTab === 'chat' ? 'active' : ''}" onclick="switchAssistantTab('chat')">💬 Sohbet &amp; Gemini</button>
+    </div>
+
+    <!-- TAB 1: OMNI SEARCH RESULTS -->
+    <div id="omni-search-tab-content" style="display:${currentAssistantTab === 'search' ? 'block' : 'none'};">
+      <div class="omni-results-container" id="omni-results-container"></div>
+    </div>
+
+    <!-- TAB 2: CHAT & GEMINI -->
+    <div id="omni-chat-tab-content" style="display:${currentAssistantTab === 'chat' ? 'block' : 'none'};">
+      <div class="ai-quick-row">
+        <button class="ai-quick-chip" onclick="sendAiQuick('Kawaguchiko otobüsümüz kaçta?')">🚌 Otobüs Saati</button>
+        <button class="ai-quick-chip" onclick="sendAiQuick('Bugün yağmur yağıyor')">☔ Yağmur Modu</button>
+        <button class="ai-quick-chip" onclick="sendAiQuick('Öğle yemeğini değiştir')">🍽️ Öğün Değiştir</button>
+        <button class="ai-quick-chip" onclick="sendAiQuick('Otomattan ne içebilirim?')">🥤 Otomat</button>
+        <button class="ai-quick-chip" onclick="sendAiQuick('Bütçeye 2500 yen yemek ekle')">💴 +2.500¥ Ekle</button>
+      </div>
+
+      <div class="ai-chat-log" id="ai-chat-log">
+        ${aiChatMessages.map(m => `<div class="ai-msg ${m.role}">${m.html}</div>`).join('')}
+      </div>
+
+      <div class="ai-input-row">
+        <input type="text" id="ai-input" class="search-input" style="flex:1; padding:9px 12px;" placeholder="Örn: Kyoto helal yemek bul, bütçeye 3000 yen ekle..." onkeydown="if(event.key==='Enter')sendAiMessage()">
+        <button class="hdr-btn hdr-primary" onclick="sendAiMessage()">Gönder</button>
+      </div>
+
+      <details class="ai-settings-box">
+        <summary style="cursor:pointer; font-weight:700; color:var(--text-secondary);">⚙️ İsteğe Bağlı: Gerçek Gemini API Anahtarı Bağla (${hasKey ? 'Bağlı' : 'Yok'})</summary>
+        <p style="margin:6px 0; color:var(--text-muted);">Anahtar yalnızca bu telefonun tarayıcısında (localStorage) saklanır; girmezseniz çevrimdışı asistan çalışmaya devam eder.</p>
+        <div style="display:flex; gap:6px;">
+          <input type="password" id="ai-key-input" class="search-input" style="flex:1; padding:6px 10px;" placeholder="AIza..." value="${escapeAttr(appState.geminiApiKey || '')}">
+          <button class="action-chip map-route" onclick="saveGeminiApiKey()">Kaydet</button>
+        </div>
+      </details>
+    </div>
   `;
-  const logEl = document.getElementById('ai-chat-log');
-  if (logEl) logEl.scrollTop = logEl.scrollHeight;
+
+  if (currentAssistantTab === 'search') {
+    updateOmniView();
+  } else {
+    const logEl = document.getElementById('ai-chat-log');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+  }
 }
 
 function saveGeminiApiKey() {
@@ -4651,61 +5290,23 @@ function runLocalAiAssistant(raw) {
     }
   }
 
-  // 4. Meal / Stop swap shortcuts
-  if (q.includes('öğle') && (q.includes('değiştir') || q.includes('alternatif'))) {
-    return {
-      didAction: true,
-      html: `🍽️ <strong>Gün ${currentDayIndex + 1}</strong> için helal öğle yemeği alternatiflerini hemen açabilirim: <div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); openMealSwapModal('${curDay.id}', 'lunch');">🔄 Öğle Alternatiflerini Aç</button></div>`
-    };
-  }
-  if (q.includes('akşam') && (q.includes('değiştir') || q.includes('alternatif'))) {
-    return {
-      didAction: true,
-      html: `🍽️ <strong>Gün ${currentDayIndex + 1}</strong> için helal akşam yemeği alternatiflerini hemen açabilirim: <div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); openMealSwapModal('${curDay.id}', 'dinner');">🔄 Akşam Alternatiflerini Aç</button></div>`
-    };
-  }
-
-  // 5. Date & Day lookup ("26 kasım", "26 kas", "4 aralık", "bugün", "yarın", "gün 5")
-  const formatDaySummary = (dIdx) => {
-    const target = itineraryData[dIdx];
-    const stopsList = (target.stops || []).slice(0, 6).map(s => `• <strong>${s.time}</strong> — ${s.name}`).join('<br>');
-    const lunchName = (target.lunchOptions && target.lunchOptions[0]) ? target.lunchOptions[0].name : '';
-    const dinnerName = (target.dinnerOptions && target.dinnerOptions[0]) ? target.dinnerOptions[0].name : '';
-    return {
-      didAction: false,
-      html: `📅 <strong>Gün ${dIdx + 1} (${target.date} ${target.dayName}) — ${target.city}</strong><br><strong>${target.title}</strong><br><div style="margin:6px 0; font-size:0.79rem;">${stopsList}</div>${lunchName ? `🍽️ <strong>Öğle:</strong> ${lunchName}<br>` : ''}${dinnerName ? `🌙 <strong>Akşam:</strong> ${dinnerName}<br>` : ''}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); selectDay(${dIdx});">Bu Güne Git</button></div>`
-    };
-  };
-
-  if ((q.includes('bugün') || q.includes('ne yapıyoruz') || q.includes('plan')) && !q.match(/\d{1,2}\s*(kasım|kas|aralık|ara)/)) {
-    return formatDaySummary(currentDayIndex);
-  }
-  if (q.includes('yarın')) {
-    return formatDaySummary(Math.min(itineraryData.length - 1, currentDayIndex + 1));
-  }
-  const dateMatch = q.match(/(\d{1,2})\s*(kasım|kas|aralık|ara)/i);
-  if (dateMatch) {
-    const dd = String(parseInt(dateMatch[1], 10)).padStart(2, '0');
-    const mm = dateMatch[2].toLowerCase().startsWith('kas') ? '11' : '12';
-    const iso = `2026-${mm}-${dd}`;
-    const dIdx = itineraryData.findIndex(d => d.date === iso);
-    if (dIdx !== -1) return formatDaySummary(dIdx);
-  }
-  const dayMatch = q.match(/gün\s*(\d{1,2})/i);
-  if (dayMatch) {
-    const dNum = parseInt(dayMatch[1], 10) - 1;
-    if (dNum >= 0 && dNum < itineraryData.length) {
-      return formatDaySummary(dNum);
+  // 4. Date intent
+  const dateIso = parseDateIntent(raw);
+  if (dateIso) {
+    const targetIdx = itineraryData.findIndex(d => d.date === dateIso);
+    if (targetIdx !== -1) {
+      const target = itineraryData[targetIdx];
+      const stopsList = (target.stops || []).slice(0, 6).map(s => `• <strong>${s.time}</strong> — ${s.name}`).join('<br>');
+      const lunchName = (target.lunchOptions && target.lunchOptions[0]) ? target.lunchOptions[0].name : '';
+      const dinnerName = (target.dinnerOptions && target.dinnerOptions[0]) ? target.dinnerOptions[0].name : '';
+      return {
+        didAction: false,
+        html: `📅 <strong>Gün ${targetIdx + 1} (${target.date} ${target.dayName}) — ${target.city}</strong><br><strong>${target.title}</strong><br><div style="margin:6px 0; font-size:0.79rem;">${stopsList}</div>${lunchName ? `🍽️ <strong>Öğle:</strong> ${lunchName}<br>` : ''}${dinnerName ? `🌙 <strong>Akşam:</strong> ${dinnerName}<br>` : ''}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); selectDay(${targetIdx});">Bu Güne Git</button></div>`
+      };
     }
   }
-  if (/^(selam|merhaba|hey|slm|mrb|naber)/.test(q) && q.length < 25) {
-    return {
-      didAction: false,
-      html: `Selam! Şu an <strong>Gün ${currentDayIndex + 1} (${curDay.date} • ${curDay.city})</strong> seçili: <em>${curDay.title}</em>.<br>Bana tarih (<em>"26 kasım ne yapıyoruz"</em>), bütçe (<em>"bütçeye 2500 yen ekle"</em>), hava (<em>"yağmur yağıyor"</em>) veya semt/ürün sorabilirsin.`
-    };
-  }
 
-  // 6. Tickets / Kawaguchiko / Flight lookup
+  // 5. Tickets / Kawaguchiko
   if (q.includes('otobüs') || q.includes('kawaguchiko') || q.includes('bilet') || q.includes('uçuş') || q.includes('tren')) {
     const matches = (bookedTicketsData || []).filter(t => {
       const s = (t.trainName + ' ' + t.depStation + ' ' + t.arrStation + ' ' + t.date).toLowerCase();
@@ -4722,45 +5323,27 @@ function runLocalAiAssistant(raw) {
     }
   }
 
-  // 7. Vending & Brand Snacks lookup
-  if (q.includes('otomat') || q.includes('içecek') || q.includes('atıştırmalık') || q.includes('market') || q.includes('konbini')) {
-    const drinks = (halalData.vendingDrinks || []).slice(0, 4).map(d => `• <strong>${d.brand} ${d.product}</strong> (${d.jpName})`).join('<br>');
-    const snacks = (halalData.brandSnacks || []).slice(0, 4).map(s => `• <strong>${s.brand} ${s.product}</strong> (${s.jpName})`).join('<br>');
-    return {
-      didAction: false,
-      html: `🥤 <strong>Otomattan:</strong><br>${drinks}<br><br>🛒 <strong>Marketten:</strong><br>${snacks}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); currentHalalSubtab='brands'; switchTab('halal');">Tüm 34 Markayı Gör</button></div>`
-    };
-  }
-
-  // 8. General keyword search across Itinerary stops + Halal Directory + Shopping
-  const stopWords = ['ne', 'yapıyoruz', 'var', 'nerede', 'nasıl', 'gideriz', 'selam', 'hey', 'merhaba', 'kasım', 'aralık'];
-  const words = q.split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
-  const hits = [];
-  if (words.length) {
-    itineraryData.forEach((d, dIdx) => {
-      (d.stops || []).forEach(s => {
-        const hay = (s.name + ' ' + d.city + ' ' + d.title).toLowerCase();
-        if (words.some(w => hay.includes(w))) {
-          hits.push(`📍 <strong>Gün ${dIdx + 1} (${d.date.slice(5)}):</strong> ${s.name} (${s.time}) <button class="action-chip" style="padding:2px 7px; font-size:0.7rem;" onclick="closeAiAssistantModal(); selectDay(${dIdx});">Git</button>`);
-        }
-      });
-    });
-    (halalData.halalDirectory || []).forEach(r => {
-      const hay = (r.name + ' ' + r.city + ' ' + r.area + ' ' + r.cuisine).toLowerCase();
-      if (words.some(w => hay.includes(w))) hits.push(`🍽️ <strong>${r.name}</strong> (${r.city} • ${r.priceRange})`);
-    });
-    (shoppingData || []).forEach(s => {
-      const hay = (s.title + ' ' + s.category + ' ' + (s.citiesAndShops || []).join(' ')).toLowerCase();
-      if (words.some(w => hay.includes(w))) hits.push(`🛍️ <strong>${s.title}</strong> (${s.category})`);
-    });
-  }
-  if (hits.length) {
-    return { didAction: false, html: `Bulunan eşleşmeler:<br>${hits.slice(0, 5).join('<br>')}` };
+  // 6. Leverage Omni Search
+  const omniRes = performOmniSearch(raw);
+  if (omniRes) {
+    const total = omniRes.days.length + omniRes.stops.length + omniRes.halal.length + omniRes.market.length + omniRes.shop.length + omniRes.tix.length + omniRes.acc.length;
+    if (total > 0) {
+      const summaryItems = [];
+      if (omniRes.days.length) summaryItems.push(`📅 <strong>${omniRes.days[0].title}</strong> (Gün ${omniRes.days[0].idx + 1})`);
+      if (omniRes.stops.length) summaryItems.push(`📍 <strong>${omniRes.stops[0].name}</strong> (Gün ${omniRes.stops[0].dIdx + 1})`);
+      if (omniRes.halal.length) summaryItems.push(`🍽️ <strong>${omniRes.halal[0].name}</strong> (${omniRes.halal[0].city})`);
+      if (omniRes.market.length) summaryItems.push(`🥤 <strong>${omniRes.market[0].brand} ${omniRes.market[0].name}</strong>`);
+      if (omniRes.shop.length) summaryItems.push(`🛍️ <strong>${omniRes.shop[0].title}</strong>`);
+      return {
+        didAction: false,
+        html: `Bulunan eşleşmeler (${total} sonuç):<br>${summaryItems.join('<br>')}<div style="margin-top:8px;"><button class="action-chip map-route" onclick="switchAssistantTab('search'); setOmniQuickQuery('${escapeAttr(raw)}');">Tüm Sonuçları Gör (${total})</button></div>`
+      };
+    }
   }
 
   return {
     didAction: false,
-    html: `Şu an <strong>Gün ${currentDayIndex + 1} (${curDay ? curDay.city : ''})</strong> üzerindeyiz. Şunları deneyebilirsin:<br>• <em>"Bütçeye 2000 yen yemek ekle"</em><br>• <em>"Bugün yağmur yağıyor"</em><br>• <em>"Öğle yemeğini değiştir"</em><br>• <em>"Kyoto helal yemek"</em> veya <em>"Otomattan ne içeyim?"</em>`
+    html: `Şu an <strong>Gün ${currentDayIndex + 1} (${curDay ? curDay.city : ''})</strong> üzerindeyiz. Şunları arayabilirsin:<br>• <em>"26 kasım"</em> veya <em>"fuji"</em><br>• <em>"Bütçeye 2000 yen yemek ekle"</em><br>• <em>"Helal ramen"</em> veya <em>"Otomat"</em>`
   };
 }
 
