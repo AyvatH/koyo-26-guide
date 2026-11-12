@@ -551,13 +551,13 @@ function setTimelineFilter(f) {
 
 function buildBookedAnchorBanner(index) {
   const alerts = {
-    0: { badge: 'Qatar Airways (ISB→DOH→HND) & Heiwajima', text: 'İslamabad check-in biniş kartını (QR812) ATMA — Heiwajima resepsiyonuna verilecek! 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
+    0: { badge: 'Qatar: QR633 (03:20 ISB→05:05 DOH) + QR812 (07:25→22:55 HND)', text: '20 Kas Cuma 23:45’te ISB’de olun (25 kg)! QR812 fiziki biniş kartını ATMA — Heiwajima’ya verilecek. 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
     5: { badge: 'Hakone Golden Course (Free Pass)', text: 'Shinjuku → Hakone-Yumoto → Tozan Dağ Treni → Owakudani Teleferik → Ashi Korsan Gemisi → Hakone Tapınağı. Çantada hazır öğle sepeti şart!', hasIcs: true },
     6: { badge: 'Nozomi 379 (Bilet Alındı)', text: 'Shinagawa 11:46 → Shin-Osaka 14:06 • En geç 11:25’te Shinagawa kapısında olun.', hasIcs: true },
     13: { badge: 'Sagano 7 (Bilet Alındı)', text: 'Torokko Saga 12:02 → Kameoka 12:25 • 11:45’te peronda olun; Bamboo Grove 10:00 başlar.', hasIcs: true },
     16: { badge: 'Aoniyoshi (14:55) + Todai-ji', text: '¥730 ek bilet alındı; turnikede +¥760 IC basılacak. Nara’ya inince ÖNCE Todai-ji’ye (17:00 kapanış!) yürüyün.', hasIcs: true },
     19: { badge: 'Nozomi 250 Saat Teyidi', text: 'Biletiniz 11:30–13:38; 2026 JR tarifesi 11:36–13:43. SmartEX’ten peronu kontrol edip 11:15’te hazır olun.', hasIcs: true },
-    21: { badge: 'Haneda T3 Çıkış Sırası', text: '1) Tax-Free Kiosk → 2) Bagaj → 3) 4F Honolu (Güvenlik ÖNCESİ!) → 4) Güvenlik → 10:05 Kapı.', hasIcs: false }
+    21: { badge: 'Thai Airways TG683 (10:35) + TG349 (18:45→22:20 ISB)', text: '2 PCS valiz • Koltuk 44B/40J • MOML Onaylı. Sıra: 1) Tax-Free Kiosk → 2) Thai Check-in → 3) 4F Honolu (Güvenlik ÖNCESİ!) → 4) Güvenlik → 10:05 Kapı.', hasIcs: true }
   };
   const info = alerts[index];
   if (!info) return '';
@@ -2492,18 +2492,23 @@ function foldICSLine(line) {
 function downloadTripICS() {
   const events = [
     { uid: 'heiwajima-deadline@jp2026', start: '20261120T130000', end: '20261120T140000', summary: 'SON SAAT: Heiwajima Onsen Welcome Course Rezervasyonu', desc: 'QR812 ile 21 Kas gece giriş için online kayıt son saati 14:00 (JST).' },
-    { uid: 'qr812-arrival@jp2026', start: '20261121T225500', end: '20261121T232500', summary: 'Qatar Airways QR812: İslamabad -> Doha -> Haneda T3 Varış', desc: 'Fiziki biniş kartını sakla, Visit Japan Web QR ve 00:40 Heiwajima servisi.' },
+    { uid: 'qr633-isb-doh@jp2026', start: '20261120T222000Z', end: '20261121T020500Z', utc: true, summary: 'Qatar QR633 (A350-1000): 03:20 ISB -> 05:05 DOH', desc: '20 Kas 23:45 ISB check-in (Yetiskin 25 kg). Fiziki binis kartini atma!' },
+    { uid: 'qr812-arrival@jp2026', start: '20261121T042500Z', end: '20261121T135500Z', utc: true, summary: 'Qatar QR812 (B777-300ER): 07:25 DOH -> 22:55 Haneda T3', desc: '2s20dk Doha aktarmasi. Visit Japan Web QR + Heiwajima 00:40/01:40 servisi.' },
     { uid: 'rikugien-light@jp2026', start: '20261125T180000', end: '20261125T194500', summary: 'Rikugien Gece Işıklandırması (İlk Gece)', desc: '18:00-20:30 açılış, Komagome İstasyonu.' },
     { uid: 'hakone-daytrip@jp2026', start: '20261126T073700', end: '20261126T183000', summary: 'Hakone Golden Course Day Trip (Free Pass)', desc: '07:37 Shinjuku Odakyu -> Hakone-Yumoto -> Owakudani -> Ashi Korsan Gemi -> Hakone Tapınağı.' },
     { uid: 'nozomi379@jp2026', start: '20261127T114600', end: '20261127T140600', summary: 'Nozomi 379: Shinagawa -> Shin-Osaka (ALINMIŞ BİLET)', desc: 'En geç 11:25 te peronda olun.' },
     { uid: 'sagano7@jp2026', start: '20261204T120200', end: '20261204T122500', summary: 'Sagano 7: Torokko Saga -> Torokko Kameoka (ALINMIŞ BİLET)', desc: '11:45 te peronda hazır olun. Vagon 1, 7A/7B.' },
     { uid: 'aoniyoshi@jp2026', start: '20261207T145500', end: '20261207T152800', summary: 'Aoniyoshi: Kyoto -> Kintetsu-Nara (+Todai-ji 17:00)', desc: '¥730 ek bilet alındı; +¥760 IC kart basılacak. Vagon 4, 2A/2B.' },
     { uid: 'nozomi250@jp2026', start: '20261210T113000', end: '20261210T134300', summary: 'Nozomi 250: Kyoto -> Shinagawa (ALINMIŞ BİLET)', desc: 'Bilet 11:30 görünse de 2026 JR tarifesi 11:36; 11:15 te peronda olun.' },
-    { uid: 'haneda-exit@jp2026', start: '20261212T073500', end: '20261212T103500', summary: 'TG683 & Haneda T3 Dönüş: Tax-Free + 10:35 Kalkış', desc: 'Bagajdan ÖNCE Tax-Free Kiosk! Kahvaltı (Honolu 4F) güvenlik ÖNCESİ!' }
+    { uid: 'haneda-exit@jp2026', start: '20261212T073500', end: '20261212T103500', summary: 'Haneda T3 Tax-Free + Thai Check-in (TG683 10:35)', desc: 'Bagajdan ÖNCE Tax-Free Kiosk! 2 PCS bagaj. Kahvaltı (Honolu 4F) güvenlik ÖNCESİ!' },
+    { uid: 'tg683-hnd-bkk@jp2026', start: '20261212T013500Z', end: '20261212T084000Z', utc: true, summary: 'Thai TG683 (B777-300ER): 10:35 HND -> 15:40 Bangkok', desc: 'Koltuk 44B, 2 PCS, MOML Helal onaylı. BKK aktarma 3s05dk.' },
+    { uid: 'tg349-bkk-isb@jp2026', start: '20261212T114500Z', end: '20261212T172000Z', utc: true, summary: 'Thai TG349 (B787-9): 18:45 Bangkok -> 22:20 Islamabad', desc: 'Koltuk 40J, 2 PCS, MOML Helal onaylı.' }
   ];
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Japonya Rehberi 2026//TR', 'CALSCALE:GREGORIAN', 'X-WR-TIMEZONE:Asia/Tokyo'];
   events.forEach(ev => {
-    lines.push('BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:20261101T000000Z', 'DTSTART;TZID=Asia/Tokyo:' + ev.start, 'DTEND;TZID=Asia/Tokyo:' + ev.end, 'SUMMARY:' + ev.summary, 'DESCRIPTION:' + ev.desc, 'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:' + ev.summary, 'END:VALARM', 'END:VEVENT');
+    const dtStart = ev.utc ? 'DTSTART:' + ev.start : 'DTSTART;TZID=Asia/Tokyo:' + ev.start;
+    const dtEnd = ev.utc ? 'DTEND:' + ev.end : 'DTEND;TZID=Asia/Tokyo:' + ev.end;
+    lines.push('BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:20261101T000000Z', dtStart, dtEnd, 'SUMMARY:' + ev.summary, 'DESCRIPTION:' + ev.desc, 'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:' + ev.summary, 'END:VALARM', 'END:VEVENT');
   });
   lines.push('END:VCALENDAR');
   const foldedText = lines.map(foldICSLine).join('\r\n') + '\r\n';
@@ -2726,15 +2731,18 @@ function openWalletModal() {
         <span class="hero-badge" style="background:var(--gold); color:#111827;">UÇUŞ &amp; HANEDA T3 ÇIKIŞ ÖZETİ</span>
         <span class="tabular" style="font-size:0.75rem; color:#cbd5e1; font-weight:700;">21 Kas – 12 Ara 2026</span>
       </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:8px; font-size:0.8rem;">
-        <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
-          <strong style="color:#fbbf24;">Gidiş: İslamabad (ISB) → Doha → Haneda (QR812)</strong><br>
-          • <strong>Biniş &amp; Bagaj:</strong> Online check-in 24s önce • Helal ikram (MOML) standart • El çantasına 1 gecelik pijama/şarj al.<br>
-          • <strong>Kritik:</strong> QR812 fiziki biniş kartını (boarding pass) ATMA — 21 Kas 22:55 Haneda T3 → 00:40/01:40 Heiwajima Onsen’e verilecek!
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(225px, 1fr)); gap:8px; font-size:0.79rem;">
+        <div style="background:rgba(255,255,255,0.06); padding:9px 10px; border-radius:8px; line-height:1.48;">
+          <strong style="color:#fbbf24;">Gidiş (21 Kas Cmt): İslamabad (ISB) → Tokyo • Qatar Airways</strong><br>
+          • <strong>QR 633 (A350-1000):</strong> <strong>03:20 ISB → 05:05 DOH</strong> (3s 45dk • 20 Kas Cuma 23:45–00:20’de ISB check-in, <strong>25 kg</strong> bagaj)<br>
+          • <strong>Aktarma:</strong> Doha 2s 20dk<br>
+          • <strong>QR 812 (B777-300ER):</strong> <strong>07:25 DOH → 22:55 HND T3</strong> (9s 30dk) → Fiziki biniş kartını ATMA, Heiwajima 00:40/01:40’a ver!
         </div>
-        <div style="background:rgba(255,255,255,0.06); padding:8px 10px; border-radius:8px;">
-          <strong style="color:#86efac;">Dönüş: Haneda (TG683) → Bangkok → İslamabad (ISB) • 12 Ara 10:35</strong><br>
-          Minamikamata (Kojiya İst.) → Keikyu ile 8 dk → T3 varış 07:35 hedef. Check-in öncesi pasaportla Tax-Free Kiosk!
+        <div style="background:rgba(255,255,255,0.06); padding:9px 10px; border-radius:8px; line-height:1.48;">
+          <strong style="color:#86efac;">Dönüş (12 Ara Cmt): Tokyo → İslamabad (ISB) • Thai Airways</strong><br>
+          • <strong>TG 683 (B777-300ER):</strong> <strong>10:35 HND T3 → 15:40 BKK</strong> (7s 05dk • Koltuk 44B)<br>
+          • <strong>Aktarma:</strong> Bangkok 3s 05dk<br>
+          • <strong>TG 349 (B787-9):</strong> <strong>18:45 BKK → 22:20 ISB</strong> (Koltuk 40J • <strong>2 Parça (2 PCS) Valiz</strong> &amp; <strong>MOML Helal</strong> onaylı)
         </div>
       </div>
       <div class="flight-exit-steps">
