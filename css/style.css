@@ -2553,3 +2553,46 @@ body.dark-mode .tl-marker {
   background: var(--sky-soft);
   color: var(--sky);
 }
+
+
+/* === V16: ILLUSTRATED POSTER INFOGRAPHICS === */
+.poster-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.poster-thumb-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #faf5eb;
+  cursor: pointer;
+  position: relative;
+}
+
+.poster-thumb-btn img {
+  display: block;
+  width: 100%;
+  max-height: 440px;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.poster-zoom-pill {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  background: rgba(15, 23, 42, 0.84);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 999px;
+}

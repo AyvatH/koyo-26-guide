@@ -1,4 +1,4 @@
-const CACHE_NAME = 'japonya-2026-koyo-v15-enc';
+const CACHE_NAME = 'japonya-2026-koyo-v16-enc';
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,12 @@ const ASSETS = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './assets/infographics/ig_kawaguchiko.jpg',
+  './assets/infographics/ig_arashiyama.jpg',
+  './assets/infographics/ig_konbini_halal.jpg',
+  './assets/infographics/ig_nara.jpg',
+  './assets/infographics/ig_taxfree_shopping.jpg'
 ];
 
 self.addEventListener('install', (event) => {
