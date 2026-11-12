@@ -2596,3 +2596,93 @@ body.dark-mode .tl-marker {
   padding: 5px 10px;
   border-radius: 999px;
 }
+
+
+/* === V18: AI ASSISTANT & PRODUCT VISUAL THUMBS === */
+.brand-item-row {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.brand-visual-thumb {
+  width: 56px;
+  height: 70px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.brand-visual-thumb svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ai-chat-log {
+  max-height: 44vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 6px 2px 10px 2px;
+}
+
+.ai-msg {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.83rem;
+  line-height: 1.48;
+  max-width: 92%;
+}
+
+.ai-msg.user {
+  align-self: flex-end;
+  background: var(--sky);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ai-msg.bot {
+  align-self: flex-start;
+  background: var(--card-tint);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+
+.ai-quick-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.ai-quick-chip {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.ai-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ai-settings-box {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.76rem;
+}

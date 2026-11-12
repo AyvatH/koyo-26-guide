@@ -67,6 +67,9 @@
         </div>
 
         <div class="header-actions">
+          <button class="hdr-btn hdr-primary" onclick="openAiAssistantModal()" title="AI Seyahat Asistanı" aria-label="AI Asistan">
+            <span>🤖 Asistan</span>
+          </button>
           <button class="hdr-btn hdr-primary" onclick="openWalletModal()" title="Alınmış Tren Biletleri ve Ev Adresleri" aria-label="Biletler ve Ev Adresleri">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
             <span>Bilet &amp; Ev</span>
@@ -254,6 +257,21 @@
         <button class="hdr-btn" onclick="closeSwapModal()">Kapat</button>
       </div>
       <div id="swap-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 8: AI SEYAHAT ASİSTANI (OFFLINE + GEMİNİ BYOK) -->
+  <div class="modal-overlay" id="ai-modal" onclick="if(event.target===this)closeAiAssistantModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow" style="color:var(--sky);">Akıllı Yardımcı &amp; Hızlı İşlem</span>
+          <h2 class="modal-title">🤖 Seyahat Asistanı</h2>
+        </div>
+        <button class="hdr-btn" onclick="closeAiAssistantModal()">Kapat</button>
+      </div>
+      <div id="ai-modal-body"></div>
     </div>
   </div>
 

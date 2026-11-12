@@ -55,7 +55,8 @@ let appState = {
   expenses: [],
   darkMode: false,
   mapProvider: 'google', // 'google' | 'apple'
-  cloudSyncUrl: ''
+  cloudSyncUrl: '',
+  geminiApiKey: ''
 };
 
 const STORAGE_KEY_MASTER = 'japonya_2026_master_state_v3';
@@ -1316,18 +1317,27 @@ function renderHalal() {
           <strong>İpucu:</strong> Kırmızı etiket <code>あったか〜い</code> = Sıcak, Mavi etiket <code>つめた〜い</code> = Soğuk. Tüm listedekiler domuz/alkol/jelatin kontrolünden geçirilmiştir.
         </p>
         <div class="grid-2col">
-          ${drinks.map(d => `
+          ${drinks.map(d => {
+            const imgUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(d.brand + ' ' + d.jpName + ' ' + d.product);
+            return `
             <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
-                <span class="halal-verify-badge">${d.brand}</span>
-                <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${d.price}</span>
+              <div class="brand-item-row">
+                <div class="brand-visual-thumb">${renderBrandThumbSvg(d, 'drink')}</div>
+                <div style="min-width:0; flex:1;">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+                    <span class="halal-verify-badge">${d.brand}</span>
+                    <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${d.price}</span>
+                  </div>
+                  <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${d.product}</strong>
+                  <div class="jp-pill" style="margin:4px 0;">${d.jpName} • ${d.temp}</div>
+                  <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:4px;">${d.whyPick}</p>
+                  <div style="font-size:0.74rem; color:var(--matcha); font-weight:700; margin-bottom:6px;">✔ ${d.halalCheck}</div>
+                  <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📷 <span>Gerçek Paket Fotosu</span></a>
+                </div>
               </div>
-              <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${d.product}</strong>
-              <div class="jp-pill" style="margin:4px 0;">${d.jpName} • ${d.temp}</div>
-              <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:4px;">${d.whyPick}</p>
-              <div style="font-size:0.74rem; color:var(--matcha); font-weight:700;">✔ ${d.halalCheck}</div>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       </div>
 
@@ -1338,19 +1348,28 @@ function renderHalal() {
           7-Eleven, Lawson, FamilyMart, Gyomu Super, Life ve Don Quijote raflarında doğrudan paket adıyla arayabileceğiniz güvenli ürünler ve kaçınılacak kardeş aromalar.
         </p>
         <div class="grid-2col">
-          ${snacks.map(s => `
+          ${snacks.map(s => {
+            const imgUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(s.brand + ' ' + s.jpName + ' ' + s.product);
+            return `
             <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
-                <span class="price-verify-badge">${s.brand}</span>
-                <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${s.price}</span>
+              <div class="brand-item-row">
+                <div class="brand-visual-thumb">${renderBrandThumbSvg(s, 'snack')}</div>
+                <div style="min-width:0; flex:1;">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+                    <span class="price-verify-badge">${s.brand}</span>
+                    <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${s.price}</span>
+                  </div>
+                  <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${s.product}</strong>
+                  <div class="jp-pill" style="margin:4px 0;">${s.jpName}</div>
+                  <div style="font-size:0.74rem; color:var(--sky); font-weight:700; margin-bottom:4px;">📍 ${s.where}</div>
+                  <div style="font-size:0.77rem; color:var(--matcha); margin-bottom:4px;"><strong>✔ Kontrol:</strong> ${s.halalCheck}</div>
+                  ${s.avoidVariant ? `<div style="font-size:0.75rem; color:var(--vermilion); background:rgba(198,40,40,0.06); padding:5px 7px; border-radius:6px; margin-bottom:6px;"><strong>⚠️ Kardeş Aromadan Kaçın:</strong> ${s.avoidVariant}</div>` : ''}
+                  <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📷 <span>Gerçek Paket Fotosu</span></a>
+                </div>
               </div>
-              <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${s.product}</strong>
-              <div class="jp-pill" style="margin:4px 0;">${s.jpName}</div>
-              <div style="font-size:0.74rem; color:var(--sky); font-weight:700; margin-bottom:4px;">📍 ${s.where}</div>
-              <div style="font-size:0.77rem; color:var(--matcha); margin-bottom:4px;"><strong>✔ Kontrol:</strong> ${s.halalCheck}</div>
-              ${s.avoidVariant ? `<div style="font-size:0.75rem; color:var(--vermilion); background:rgba(198,40,40,0.06); padding:5px 7px; border-radius:6px;"><strong>⚠️ Kardeş Aromadan Kaçın:</strong> ${s.avoidVariant}</div>` : ''}
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -4415,3 +4434,313 @@ function renderTransitGateInfographic() {
 
 
 
+
+
+// === V18: BRAND VISUAL THUMBS & 2-LAYER AI TRAVEL ASSISTANT ===
+function renderBrandThumbSvg(item, kind) {
+  const txt = ((item.brand || '') + ' ' + (item.product || '') + ' ' + (item.category || '')).toLowerCase();
+  let c1 = '#16a34a'; let c2 = '#dcfce7'; let tag = 'TEA';
+  if (txt.includes('boss') || txt.includes('georgia') || txt.includes('kahve') || txt.includes('chocolate') || txt.includes('ghana') || txt.includes('cocoa') || txt.includes('kakao')) {
+    c1 = '#78350f'; c2 = '#fef3c7'; tag = txt.includes('kahve') || txt.includes('boss') || txt.includes('georgia') ? 'COFFEE' : 'CHOCO';
+  } else if (txt.includes('pocari') || txt.includes('aquarius') || txt.includes('dakara') || txt.includes('wilkinson') || txt.includes('calpis') || txt.includes('süt') || txt.includes('gyunyu') || txt.includes('yogurt')) {
+    c1 = '#0284c7'; c2 = '#e0f2fe'; tag = kind === 'drink' ? 'DRINK' : 'MILK';
+  } else if (txt.includes('lemon') || txt.includes('cider') || txt.includes('jagabee') || txt.includes('potato') || txt.includes('egg') || txt.includes('yumurta') || txt.includes('pudding')) {
+    c1 = '#d97706'; c2 = '#fef3c7'; tag = kind === 'drink' ? 'SODA' : 'SNACK';
+  } else if (txt.includes('matcha') || txt.includes('edamame') || txt.includes('ocha') || txt.includes('ayataka') || txt.includes('nama')) {
+    c1 = '#15803d'; c2 = '#dcfce7'; tag = kind === 'drink' ? '茶' : 'SNACK';
+  } else {
+    c1 = '#b91c1c'; c2 = '#fee2e2'; tag = kind === 'drink' ? 'HOT' : 'PACK';
+  }
+
+  if (kind === 'drink') {
+    return `
+      <svg viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="19" y="3" width="10" height="5" rx="2" fill="${c1}"/>
+        <path d="M16 9 L32 9 L36 19 L36 56 Q36 60 32 60 L16 60 Q12 60 12 56 L12 19 Z" fill="${c2}" stroke="${c1}" stroke-width="2"/>
+        <rect x="13" y="24" width="22" height="18" rx="3" fill="${c1}"/>
+        <text x="24" y="36" text-anchor="middle" font-size="7" font-weight="900" fill="#ffffff">${tag}</text>
+      </svg>
+    `;
+  }
+  return `
+    <svg viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="8" y="8" width="32" height="48" rx="6" fill="${c2}" stroke="${c1}" stroke-width="2"/>
+      <rect x="11" y="18" width="26" height="22" rx="4" fill="${c1}"/>
+      <text x="24" y="32" text-anchor="middle" font-size="7" font-weight="900" fill="#ffffff">${tag}</text>
+      <circle cx="24" cy="49" r="3.5" fill="${c1}" opacity="0.6"/>
+    </svg>
+  `;
+}
+
+let aiChatMessages = [
+  {
+    role: 'bot',
+    html: 'Merhaba! Ben <strong>Japonya 2026 Asistanın</strong>. İnternetsiz bile uygulamada doğrudan işlem yapabilirim.<br>Örnek: <em>"Bütçeye 3500 yen yemek ekle"</em>, <em>"Bugün yağmur yağıyor"</em>, <em>"Kawaguchiko otobüsümüz kaçta?"</em>, <em>"Öğle yemeğini değiştir"</em> veya <em>"Otomattan ne içeyim?"</em>'
+  }
+];
+
+function openAiAssistantModal() {
+  const modal = document.getElementById('ai-modal');
+  if (!modal) return;
+  renderAiModalBody();
+  modal.classList.add('open');
+}
+
+function closeAiAssistantModal() {
+  const modal = document.getElementById('ai-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+function renderAiModalBody() {
+  const body = document.getElementById('ai-modal-body');
+  if (!body) return;
+  const hasKey = !!(appState.geminiApiKey && appState.geminiApiKey.trim());
+  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+
+  body.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:0.75rem; color:var(--text-muted);">
+      <span>Aktif Gün: <strong>Gün ${currentDayIndex + 1} (${curDay ? curDay.city : ''})</strong></span>
+      <span class="halal-verify-badge">${hasKey ? '✨ Gemini API + Offline' : '⚡ Çevrimdışı Akıllı Mod'}</span>
+    </div>
+
+    <div class="ai-quick-row">
+      <button class="ai-quick-chip" onclick="sendAiQuick('Kawaguchiko otobüsümüz kaçta?')">🚌 Otobüs Saati</button>
+      <button class="ai-quick-chip" onclick="sendAiQuick('Bugün yağmur yağıyor')">☔ Yağmur Modu</button>
+      <button class="ai-quick-chip" onclick="sendAiQuick('Öğle yemeğini değiştir')">🍽️ Öğün Değiştir</button>
+      <button class="ai-quick-chip" onclick="sendAiQuick('Otomattan ne içebilirim?')">🥤 Otomat</button>
+      <button class="ai-quick-chip" onclick="sendAiQuick('Bütçeye 2500 yen yemek ekle')">💴 +2.500¥ Ekle</button>
+    </div>
+
+    <div class="ai-chat-log" id="ai-chat-log">
+      ${aiChatMessages.map(m => `<div class="ai-msg ${m.role}">${m.html}</div>`).join('')}
+    </div>
+
+    <div class="ai-input-row">
+      <input type="text" id="ai-input" class="search-input" style="flex:1; padding:9px 12px;" placeholder="Örn: Kyoto helal yemek bul, bütçeye 3000 yen ekle..." onkeydown="if(event.key==='Enter')sendAiMessage()">
+      <button class="hdr-btn hdr-primary" onclick="sendAiMessage()">Gönder</button>
+    </div>
+
+    <details class="ai-settings-box">
+      <summary style="cursor:pointer; font-weight:700; color:var(--text-secondary);">⚙️ İsteğe Bağlı: Gerçek Gemini API Anahtarı Bağla</summary>
+      <p style="margin:6px 0; color:var(--text-muted);">Anahtar yalnızca bu telefonun tarayıcısında (localStorage) saklanır; girmezseniz çevrimdışı asistan çalışmaya devam eder.</p>
+      <div style="display:flex; gap:6px;">
+        <input type="password" id="ai-key-input" class="search-input" style="flex:1; padding:6px 10px;" placeholder="AIza..." value="${escapeAttr(appState.geminiApiKey || '')}">
+        <button class="action-chip map-route" onclick="saveGeminiApiKey()">Kaydet</button>
+      </div>
+    </details>
+  `;
+  const logEl = document.getElementById('ai-chat-log');
+  if (logEl) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function saveGeminiApiKey() {
+  const el = document.getElementById('ai-key-input');
+  appState.geminiApiKey = el ? el.value.trim() : '';
+  saveMasterState();
+  renderAiModalBody();
+  showToast(appState.geminiApiKey ? 'Gemini API anahtarı kaydedildi' : 'API anahtarı temizlendi');
+}
+
+function sendAiQuick(txt) {
+  const inp = document.getElementById('ai-input');
+  if (inp) inp.value = txt;
+  sendAiMessage();
+}
+
+async function sendAiMessage() {
+  const inp = document.getElementById('ai-input');
+  const text = inp ? inp.value.trim() : '';
+  if (!text) return;
+  if (inp) inp.value = '';
+
+  aiChatMessages.push({ role: 'user', html: escapeHtml(text) });
+  renderAiModalBody();
+
+  const hasKey = !!(appState.geminiApiKey && appState.geminiApiKey.trim());
+  const localRes = runLocalAiAssistant(text);
+
+  if (localRes.didAction || !hasKey) {
+    aiChatMessages.push({ role: 'bot', html: localRes.html });
+    renderAiModalBody();
+    return;
+  }
+
+  aiChatMessages.push({ role: 'bot', html: '<em>Gemini düşünüyor...</em>' });
+  renderAiModalBody();
+  try {
+    const gemHtml = await callGeminiWithTools(text, appState.geminiApiKey.trim());
+    aiChatMessages[aiChatMessages.length - 1] = { role: 'bot', html: gemHtml };
+  } catch (err) {
+    aiChatMessages[aiChatMessages.length - 1] = { role: 'bot', html: localRes.html + `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">(Çevrimdışı moda düşüldü)</div>` };
+  }
+  renderAiModalBody();
+}
+
+function runLocalAiAssistant(raw) {
+  const q = (raw || '').toLowerCase();
+  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+
+  // 1. Add expense command
+  const expMatch = q.match(/(\d[\d\.,]*)\s*(?:yen|jpy|¥)/i) || (q.includes('ekle') && q.match(/(\d{3,6})/));
+  if ((q.includes('bütçe') || q.includes('harcama') || q.includes('ekle')) && expMatch) {
+    const amt = parseInt(expMatch[1].replace(/[^\d]/g, ''), 10);
+    if (amt > 0) {
+      let cat = 'Yeme - İçme & Günlük Market';
+      if (q.includes('tren') || q.includes('ulaşım') || q.includes('otobüs') || q.includes('suica')) cat = 'Kalan Ulaşım, IC Kart & Giriş Ücretleri';
+      else if (q.includes('alışveriş') || q.includes('donki') || q.includes('kamera') || q.includes('saat')) cat = 'Alışveriş (Donki, Kozmetik, Hediyelik)';
+      if (!appState.expenses) appState.expenses = [];
+      appState.expenses.unshift({
+        id: 'ai-' + Date.now(),
+        title: raw.slice(0, 46),
+        category: cat,
+        amountJPY: amt,
+        date: curDay ? curDay.date : '2026-11-21',
+        entryType: 'actual'
+      });
+      saveMasterState();
+      renderBudget();
+      return {
+        didAction: true,
+        html: `✅ <strong>¥${amt.toLocaleString()}</strong> tutarında harcama <em>${cat}</em> kategorisine işlendi! <div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); switchTab('budget');">Bütçeyi Gör</button></div>`
+      };
+    }
+  }
+
+  // 2. Add note command
+  if (q.startsWith('not ekle') || q.includes('nota yaz') || q.includes('not:')) {
+    const noteBody = raw.replace(/^(not ekle:?|nota yaz:?|not:)/i, '').trim();
+    if (noteBody && curDay) {
+      if (!appState.notes) appState.notes = {};
+      appState.notes[curDay.id] = (appState.notes[curDay.id] ? appState.notes[curDay.id] + '\n' : '') + noteBody;
+      saveMasterState();
+      renderDay(currentDayIndex);
+      return { didAction: true, html: `📝 <strong>Gün ${currentDayIndex + 1}</strong> notlarına eklendi: <em>"${escapeHtml(noteBody)}"</em>` };
+    }
+  }
+
+  // 3. Weather / Lighten mode toggle
+  if (q.includes('yağmur') || q.includes('ıslan')) {
+    if (curDay) {
+      if (!appState.dayModes[curDay.id]) appState.dayModes[curDay.id] = { lighten: false, rain: false };
+      appState.dayModes[curDay.id].rain = true;
+      saveMasterState();
+      renderDay(currentDayIndex);
+      return {
+        didAction: true,
+        html: `☔ <strong>Gün ${currentDayIndex + 1} için Yağmur Modu açıldı!</strong><br>${curDay.rainAlternative || ''}<div style="margin-top:6px;"><button class="action-chip swap-pill-btn" onclick="closeAiAssistantModal(); openSwapModal('${curDay.id}', 1, 'rainy');">☔ Kapalı Alan Durağı Seç</button></div>`
+      };
+    }
+  }
+
+  if (q.includes('yorulduk') || q.includes('hafiflet')) {
+    if (curDay) {
+      if (!appState.dayModes[curDay.id]) appState.dayModes[curDay.id] = { lighten: false, rain: false };
+      appState.dayModes[curDay.id].lighten = true;
+      saveMasterState();
+      renderDay(currentDayIndex);
+      return {
+        didAction: true,
+        html: `🪶 <strong>Gün ${currentDayIndex + 1} Hafifletme Modu açıldı!</strong><br>${curDay.lightenPlan || ''}`
+      };
+    }
+  }
+
+  // 4. Meal / Stop swap shortcuts
+  if (q.includes('öğle') && (q.includes('değiştir') || q.includes('alternatif'))) {
+    return {
+      didAction: true,
+      html: `🍽️ <strong>Gün ${currentDayIndex + 1}</strong> için helal öğle yemeği alternatiflerini hemen açabilirim: <div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); openMealSwapModal('${curDay.id}', 'lunch');">🔄 Öğle Alternatiflerini Aç</button></div>`
+    };
+  }
+  if (q.includes('akşam') && (q.includes('değiştir') || q.includes('alternatif'))) {
+    return {
+      didAction: true,
+      html: `🍽️ <strong>Gün ${currentDayIndex + 1}</strong> için helal akşam yemeği alternatiflerini hemen açabilirim: <div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); openMealSwapModal('${curDay.id}', 'dinner');">🔄 Akşam Alternatiflerini Aç</button></div>`
+    };
+  }
+
+  // 5. Jump to day number
+  const dayMatch = q.match(/gün\s*(\d{1,2})/i);
+  if (dayMatch) {
+    const dNum = parseInt(dayMatch[1], 10) - 1;
+    if (dNum >= 0 && dNum < itineraryData.length) {
+      const target = itineraryData[dNum];
+      return {
+        didAction: true,
+        html: `📅 <strong>Gün ${dNum + 1} (${target.date}):</strong> ${target.title}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); selectDay(${dNum});">Bu Güne Git</button></div>`
+      };
+    }
+  }
+
+  // 6. Tickets / Kawaguchiko / Flight lookup
+  if (q.includes('otobüs') || q.includes('kawaguchiko') || q.includes('bilet') || q.includes('uçuş') || q.includes('tren')) {
+    const matches = (bookedTicketsData || []).filter(t => {
+      const s = (t.trainName + ' ' + t.depStation + ' ' + t.arrStation + ' ' + t.date).toLowerCase();
+      if (q.includes('kawaguchiko') || q.includes('otobüs')) return s.includes('fujiyama') || s.includes('kawaguchiko');
+      if (q.includes('sagano') || q.includes('arashiyama')) return s.includes('sagano');
+      if (q.includes('nara') || q.includes('aoniyoshi')) return s.includes('aoniyoshi');
+      return true;
+    }).slice(0, 3);
+    if (matches.length) {
+      return {
+        didAction: false,
+        html: matches.map(t => `🎫 <strong>${t.trainName}</strong> (${t.date})<br>${t.depStation} ${t.depTime} → ${t.arrStation} ${t.arrTime}<br><em>${t.seat || t.pnr || ''}</em>`).join('<hr style="margin:6px 0; border-color:var(--border-subtle);">') + `<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); openWalletModal();">Cüzdanımı Aç</button></div>`
+      };
+    }
+  }
+
+  // 7. Vending & Brand Snacks lookup
+  if (q.includes('otomat') || q.includes('içecek') || q.includes('atıştırmalık') || q.includes('market') || q.includes('konbini')) {
+    const drinks = (halalData.vendingDrinks || []).slice(0, 4).map(d => `• <strong>${d.brand} ${d.product}</strong> (${d.jpName})`).join('<br>');
+    const snacks = (halalData.brandSnacks || []).slice(0, 4).map(s => `• <strong>${s.brand} ${s.product}</strong> (${s.jpName})`).join('<br>');
+    return {
+      didAction: false,
+      html: `🥤 <strong>Otomattan:</strong><br>${drinks}<br><br>🛒 <strong>Marketten:</strong><br>${snacks}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); currentHalalSubtab='brands'; switchTab('halal');">Tüm 34 Markayı Gör</button></div>`
+    };
+  }
+
+  // 8. General keyword search across Itinerary + Halal Directory + Shopping
+  const words = q.split(/\s+/).filter(w => w.length > 2);
+  const hits = [];
+  (halalData.halalDirectory || []).forEach(r => {
+    const hay = (r.name + ' ' + r.city + ' ' + r.area + ' ' + r.cuisine).toLowerCase();
+    if (words.some(w => hay.includes(w))) hits.push(`🍽️ <strong>${r.name}</strong> (${r.city} • ${r.priceRange})`);
+  });
+  (shoppingData || []).forEach(s => {
+    const hay = (s.title + ' ' + s.category + ' ' + (s.citiesAndShops || []).join(' ')).toLowerCase();
+    if (words.some(w => hay.includes(w))) hits.push(`🛍️ <strong>${s.title}</strong> (${s.category})`);
+  });
+  if (hits.length) {
+    return { didAction: false, html: `Bulunan eşleşmeler:<br>${hits.slice(0, 5).join('<br>')}` };
+  }
+
+  return {
+    didAction: false,
+    html: `Şu an <strong>Gün ${currentDayIndex + 1} (${curDay ? curDay.city : ''})</strong> üzerindeyiz. Şunları deneyebilirsin:<br>• <em>"Bütçeye 2000 yen yemek ekle"</em><br>• <em>"Bugün yağmur yağıyor"</em><br>• <em>"Öğle yemeğini değiştir"</em><br>• <em>"Kyoto helal yemek"</em> veya <em>"Otomattan ne içeyim?"</em>`
+  };
+}
+
+async function callGeminiWithTools(userText, apiKey) {
+  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+  const sys = `Sen Japonya 2026 (21 Kas - 12 Ara) seyahat asistanısın. Kısa, pratik Türkçe cevap ver. Aktif gün: Gün ${currentDayIndex + 1} (${curDay.date}, ${curDay.city}, ${curDay.title}). Sadece %100 helal / domuzsuz-alkolsüz öneriler ver. Eğer kullanıcı bütçe eklemek isterse cevabın sonuna [[ADD_EXPENSE|TUTAR_SAYI|ACIKLAMA]] ekle.`;
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(apiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: sys + '\n\nKullanıcı: ' + userText }] }]
+    })
+  });
+  const data = await resp.json();
+  let txt = (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) || '';
+  if (!txt) throw new Error('Empty Gemini response');
+  const m = txt.match(/\[\[ADD_EXPENSE\|(\d+)\|([^\]]+)\]\]/);
+  if (m) {
+    const amt = parseInt(m[1], 10);
+    if (!appState.expenses) appState.expenses = [];
+    appState.expenses.unshift({ id: 'gem-' + Date.now(), title: m[2].trim(), category: 'Yeme - İçme & Günlük Market', amountJPY: amt, date: curDay.date, entryType: 'actual' });
+    saveMasterState();
+    renderBudget();
+    txt = txt.replace(m[0], `<br>✅ <strong>¥${amt.toLocaleString()}</strong> bütçeye eklendi.`);
+  }
+  return escapeHtml(txt).replace(/\n/g, '<br>');
+}
