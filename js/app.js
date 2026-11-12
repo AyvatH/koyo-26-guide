@@ -552,7 +552,7 @@ function setTimelineFilter(f) {
 function buildBookedAnchorBanner(index) {
   const alerts = {
     0: { badge: 'Qatar: QR633 (03:20 ISB→05:05 DOH) + QR812 (07:25→22:55 HND)', text: '20 Kas Cuma 23:45’te ISB’de olun (25 kg)! QR812 fiziki biniş kartını ATMA — Heiwajima’ya verilecek. 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
-    5: { badge: 'Hakone Golden Course (Free Pass)', text: 'Shinjuku → Hakone-Yumoto → Tozan Dağ Treni → Owakudani Teleferik → Ashi Korsan Gemisi → Hakone Tapınağı. Çantada hazır öğle sepeti şart!', hasIcs: true },
+    4: { badge: 'Kawaguchiko Bus 1305/1306 (Bilet Alındı)', text: 'Busta Shinjuku 08:45 (10C/10D) → 10:37 | Dönüş 17:20 (03C/03D) → 19:05. Order #3512551 • Canlı QR linki Cüzdanım’da.', hasIcs: true },
     6: { badge: 'Nozomi 379 (Bilet Alındı)', text: 'Shinagawa 11:46 → Shin-Osaka 14:06 • En geç 11:25’te Shinagawa kapısında olun.', hasIcs: true },
     13: { badge: 'Sagano 7 (Bilet Alındı)', text: 'Torokko Saga 12:02 → Kameoka 12:25 • 11:45’te peronda olun; Bamboo Grove 10:00 başlar.', hasIcs: true },
     16: { badge: 'Aoniyoshi (14:55) + Todai-ji', text: '¥730 ek bilet alındı; turnikede +¥760 IC basılacak. Nara’ya inince ÖNCE Todai-ji’ye (17:00 kapanış!) yürüyün.', hasIcs: true },
@@ -1305,7 +1305,7 @@ function renderHalal() {
         <div class="editorial-card" style="margin-top:16px; border-left:4px solid var(--sky);">
           <span class="section-eyebrow" style="color:var(--sky);">Günlük Hazır Alışveriş Listeleri</span>
           <h3 style="font-size:1.06rem; font-weight:800; margin-bottom:4px;">Şehre Göre Market &amp; Tren Kumanyası Sepetleri (7 Liste)</h3>
-          <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Hakone günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
+          <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:12px;">Sabah kahvaltısı, Kawaguchiko (Fuji) günü ve Shinkansen yolculukları için içerik kontrolü yapılmış hazır sepetler.</p>
           <div class="grid-2col">
             ${marketBasketsData.map((b, bIdx) => `
               <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-lg); padding:13px;">
@@ -2494,8 +2494,9 @@ function downloadTripICS() {
     { uid: 'heiwajima-deadline@jp2026', start: '20261120T130000', end: '20261120T140000', summary: 'SON SAAT: Heiwajima Onsen Welcome Course Rezervasyonu', desc: 'QR812 ile 21 Kas gece giriş için online kayıt son saati 14:00 (JST).' },
     { uid: 'qr633-isb-doh@jp2026', start: '20261120T222000Z', end: '20261121T020500Z', utc: true, summary: 'Qatar QR633 (A350-1000): 03:20 ISB -> 05:05 DOH', desc: '20 Kas 23:45 ISB check-in (Yetiskin 25 kg). Fiziki binis kartini atma!' },
     { uid: 'qr812-arrival@jp2026', start: '20261121T042500Z', end: '20261121T135500Z', utc: true, summary: 'Qatar QR812 (B777-300ER): 07:25 DOH -> 22:55 Haneda T3', desc: '2s20dk Doha aktarmasi. Visit Japan Web QR + Heiwajima 00:40/01:40 servisi.' },
-    { uid: 'rikugien-light@jp2026', start: '20261125T180000', end: '20261125T194500', summary: 'Rikugien Gece Işıklandırması (İlk Gece)', desc: '18:00-20:30 açılış, Komagome İstasyonu.' },
-    { uid: 'hakone-daytrip@jp2026', start: '20261126T073700', end: '20261126T183000', summary: 'Hakone Golden Course Day Trip (Free Pass)', desc: '07:37 Shinjuku Odakyu -> Hakone-Yumoto -> Owakudani -> Ashi Korsan Gemi -> Hakone Tapınağı.' },
+    { uid: 'kawaguchiko-bus-out@jp2026', start: '20261125T084500', end: '20261125T103700', summary: 'Bus 1305: Busta Shinjuku -> Kawaguchiko (ALINMIŞ BİLET)', desc: '08:25 peron • Vagon 1, 10C/10D • Order #3512551 (AR0000165332).' },
+    { uid: 'kawaguchiko-bus-in@jp2026', start: '20261125T172000', end: '20261125T190500', summary: 'Bus 1306: Kawaguchiko -> Busta Shinjuku (ALINMIŞ BİLET)', desc: 'Vagon 1, 03C/03D • Order #3512551 (AR0000165333).' },
+    { uid: 'rikugien-light@jp2026', start: '20261126T180000', end: '20261126T194500', summary: 'Rikugien Gece Işıklandırması (Komagome)', desc: '18:00-20:30 açılış, Komagome İstasyonu.' },
     { uid: 'nozomi379@jp2026', start: '20261127T114600', end: '20261127T140600', summary: 'Nozomi 379: Shinagawa -> Shin-Osaka (ALINMIŞ BİLET)', desc: 'En geç 11:25 te peronda olun.' },
     { uid: 'sagano7@jp2026', start: '20261204T120200', end: '20261204T122500', summary: 'Sagano 7: Torokko Saga -> Torokko Kameoka (ALINMIŞ BİLET)', desc: '11:45 te peronda hazır olun. Vagon 1, 7A/7B.' },
     { uid: 'aoniyoshi@jp2026', start: '20261207T145500', end: '20261207T152800', summary: 'Aoniyoshi: Kyoto -> Kintetsu-Nara (+Todai-ji 17:00)', desc: '¥730 ek bilet alındı; +¥760 IC kart basılacak. Vagon 4, 2A/2B.' },
@@ -2757,7 +2758,7 @@ function openWalletModal() {
   body.innerHTML = `
     ${flightExitHtml}
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
-      <h3 style="font-size:0.96rem; font-weight:800; color:var(--shinkansen);">Alınmış Tren Biletlerimiz (4 Sefer)</h3>
+      <h3 style="font-size:0.96rem; font-weight:800; color:var(--shinkansen);">Alınmış Tren &amp; Otobüs Biletlerimiz (${bookedTicketsData.length} Sefer)</h3>
       <button class="action-chip map-route" onclick="downloadTripICS()">${ico('calendar')} <span>.ics Ekle</span></button>
     </div>
     ${ticketsHtml}
@@ -3304,7 +3305,7 @@ function openOverviewModal() {
     <div class="overview-summary-strip">
       <div>
         <div style="font-size:0.88rem; font-weight:800; color:var(--text-main);">22 Gün • ${completedStops}/${totalStops} Durak Tamamlandı</div>
-        <div style="font-size:0.75rem; color:var(--text-secondary);">İslamabad → Tokyo &amp; Hakone → Osaka &amp; Kobe/Himeji → Kyoto &amp; Nara → Tokyo → İslamabad</div>
+        <div style="font-size:0.75rem; color:var(--text-secondary);">İslamabad → Tokyo &amp; Kawaguchiko (Fuji) → Osaka &amp; Kobe/Himeji → Kyoto &amp; Nara → Tokyo → İslamabad</div>
       </div>
       <button class="action-chip map-route" onclick="jumpToTodayTripDay()">${ico('calendar')} <span>Bugüne Atla</span></button>
     </div>
