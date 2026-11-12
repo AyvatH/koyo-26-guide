@@ -1265,8 +1265,10 @@ function renderHalal() {
   if (!container) return;
 
   const dirCount = (halalData.halalDirectory || []).length;
+  const brandCount = (halalData.vendingDrinks || []).length + (halalData.brandSnacks || []).length;
   const subtabs = [
     { id: 'restaurants', label: `Helal Restoranlar (${dirCount})` },
+    { id: 'brands', label: `Otomat & Marka (${brandCount})` },
     { id: 'markets', label: 'Konaklama Marketleri' },
     { id: 'basket', label: 'Doğrulanmış Sepet' },
     { id: 'phrases', label: 'Kart & Pazarlık' },
@@ -1301,6 +1303,55 @@ function renderHalal() {
             <a href="${buildPlaceUrl(r.mapsQuery || r.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Haritada Aç</span></a>
           </div>
         `).join('')}
+      </div>
+    `;
+  } else if (currentHalalSubtab === 'brands') {
+    const drinks = halalData.vendingDrinks || [];
+    const snacks = halalData.brandSnacks || [];
+    bodyHtml = `
+      <div class="editorial-card" style="border-left:4px solid var(--sky); margin-bottom:14px;">
+        <span class="section-eyebrow" style="color:var(--sky);">Otomat (自動販売機) İçecek Rehberi</span>
+        <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:4px;">Otomatlardan Alınabilecek Spesifik Markalar (${drinks.length} İçecek)</h3>
+        <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:10px;">
+          <strong>İpucu:</strong> Kırmızı etiket <code>あったか〜い</code> = Sıcak, Mavi etiket <code>つめた〜い</code> = Soğuk. Tüm listedekiler domuz/alkol/jelatin kontrolünden geçirilmiştir.
+        </p>
+        <div class="grid-2col">
+          ${drinks.map(d => `
+            <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+                <span class="halal-verify-badge">${d.brand}</span>
+                <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${d.price}</span>
+              </div>
+              <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${d.product}</strong>
+              <div class="jp-pill" style="margin:4px 0;">${d.jpName} • ${d.temp}</div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:4px;">${d.whyPick}</p>
+              <div style="font-size:0.74rem; color:var(--matcha); font-weight:700;">✔ ${d.halalCheck}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="editorial-card" style="border-left:4px solid var(--matcha); margin-bottom:0;">
+        <span class="section-eyebrow" style="color:var(--matcha);">Market &amp; Konbini Paketli Ürünler</span>
+        <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:4px;">Marka &amp; Paket Adıyla Güvenli Atıştırmalıklar (${snacks.length} Ürün)</h3>
+        <p style="font-size:0.79rem; color:var(--text-muted); margin-bottom:10px;">
+          7-Eleven, Lawson, FamilyMart, Gyomu Super, Life ve Don Quijote raflarında doğrudan paket adıyla arayabileceğiniz güvenli ürünler ve kaçınılacak kardeş aromalar.
+        </p>
+        <div class="grid-2col">
+          ${snacks.map(s => `
+            <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+                <span class="price-verify-badge">${s.brand}</span>
+                <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.8rem;">${s.price}</span>
+              </div>
+              <strong style="font-size:0.93rem; color:var(--text-main); display:block;">${s.product}</strong>
+              <div class="jp-pill" style="margin:4px 0;">${s.jpName}</div>
+              <div style="font-size:0.74rem; color:var(--sky); font-weight:700; margin-bottom:4px;">📍 ${s.where}</div>
+              <div style="font-size:0.77rem; color:var(--matcha); margin-bottom:4px;"><strong>✔ Kontrol:</strong> ${s.halalCheck}</div>
+              ${s.avoidVariant ? `<div style="font-size:0.75rem; color:var(--vermilion); background:rgba(198,40,40,0.06); padding:5px 7px; border-radius:6px;"><strong>⚠️ Kardeş Aromadan Kaçın:</strong> ${s.avoidVariant}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   } else if (currentHalalSubtab === 'markets') {
