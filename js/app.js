@@ -991,8 +991,6 @@ function renderDay(index) {
           </div>
         </div>
 
-        ${renderDayPosterCard(index)}
-
         <!-- ULAŞIM KARTI KARARI -->
         <div class="accordion-card ${openAccordions[passAccId] ? 'open' : ''}" id="${passAccId}" style="border-left:4px solid var(--sky);">
           <button class="accordion-trigger" onclick="toggleAccordion('${passAccId}')">
@@ -1529,7 +1527,6 @@ function renderHalal() {
       `).join('')}
     </div>
 
-    ${renderPosterBanner('assets/infographics/ig_konbini_halal.jpg', 'Konbini & Market Helal Etiket Posteri', '7-Eleven, Lawson, FamilyMart ve süpermarketlerde 3 saniyede domuz & alkol kontrolü')}
     ${renderKonbiniLabelInfographic()}
 
     ${bodyHtml}
@@ -1727,7 +1724,6 @@ function renderShopping() {
           </div>
         </div>
       </div>
-      <div style="margin-top:14px;">${renderPosterBanner('assets/infographics/ig_taxfree_shopping.jpg', 'Japonya Alışveriş & Tax-Free (%10) Posteri', '¥5.500+ iade, mühürlü poşet, kupon ve Haneda T3 bagaj akışı')}</div>
       <div style="margin-top:14px;">${renderTaxFreeInfographic()}</div>
     `;
     recalcKasaHakemi();
@@ -4367,46 +4363,4 @@ function renderTransitGateInfographic() {
 }
 
 
-// === V16: ILLUSTRATED POSTER INFOGRAPHICS ===
-function renderPosterBanner(src, title, subtitle) {
-  return `
-    <div class="poster-card">
-      <div class="infographic-head" style="margin-bottom:8px;">
-        <div>
-          <span class="section-eyebrow" style="color:var(--vermilion);">İllüstrasyonlu Görsel Poster</span>
-          <h3 style="font-size:0.98rem; font-weight:800;">${escapeHtml(title)}</h3>
-          ${subtitle ? `<p style="font-size:0.77rem; color:var(--text-muted); margin-top:2px;">${escapeHtml(subtitle)}</p>` : ''}
-        </div>
-        <button class="action-chip map-route" onclick="openPosterModal('${escapeAttr(src)}', '${escapeAttr(title)}')">🔍 <span>Tam Ekran</span></button>
-      </div>
-      <button class="poster-thumb-btn" onclick="openPosterModal('${escapeAttr(src)}', '${escapeAttr(title)}')" aria-label="${escapeAttr(title)}">
-        <img src="${escapeAttr(src)}" alt="${escapeAttr(title)}" loading="lazy">
-        <span class="poster-zoom-pill">🔍 Tam Boyut Aç</span>
-      </button>
-    </div>
-  `;
-}
 
-function renderDayPosterCard(dayIdx) {
-  const posters = {
-    4: { src: 'assets/infographics/ig_kawaguchiko.jpg', title: 'Kawaguchiko & Fuji Dağı Döngüsü (25 Kasım)', subtitle: 'Bus 1305/1306 • Chureito • Momiji Koridoru • Oishi Park • Aladdin Indo' },
-    13: { src: 'assets/infographics/ig_arashiyama.jpg', title: 'Arashiyama & Sagano Romantik Treni (4 Aralık)', subtitle: 'Bambu Ormanı • Tren No. 7 (12:02) • Tenryu-ji • Yoshiya Helal' },
-    16: { src: 'assets/infographics/ig_nara.jpg', title: 'Nara & Kintetsu Aoniyoshi Ekspresi (7 Aralık)', subtitle: 'Aoniyoshi 9407 (14:55) • Nara Parkı • Todai-ji • Kasuga Taisha' }
-  };
-  const p = posters[dayIdx];
-  return p ? renderPosterBanner(p.src, p.title, p.subtitle) : '';
-}
-
-function openPosterModal(src, title) {
-  const modal = document.getElementById('swap-modal');
-  const titleEl = document.getElementById('swap-modal-title');
-  const bodyEl = document.getElementById('swap-modal-body');
-  if (!modal || !bodyEl) return;
-  if (titleEl) titleEl.textContent = title || 'Görsel İnfografik';
-  bodyEl.innerHTML = `
-    <div style="text-align:center;">
-      <img src="${escapeAttr(src)}" alt="${escapeAttr(title || 'Poster')}" style="width:100%; height:auto; border-radius:var(--radius-md); border:1px solid var(--border); background:#faf5eb;">
-    </div>
-  `;
-  modal.classList.add('open');
-}
