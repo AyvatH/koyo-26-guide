@@ -22,6 +22,9 @@ let allDrawersExpanded = false;
 let currentTimelineFilter = 'all'; // 'all' | 'todo' | 'booked'
 let currentTipCategory = 'Tümü';
 let currentShopCategory = 'Tümü';
+let currentShopHubOnly = false;
+let currentHalalCity = 'Tümü';
+let currentSwapCtx = null;
 let currentBudgetFilter = 'Tümü';
 let currentBudgetEntryFilter = 'all'; // 'all' | 'actual' | 'estimate' | 'transfer'
 let currentHalalSubtab = 'markets'; // 'markets' | 'basket' | 'phrases' | 'radar'
@@ -37,6 +40,8 @@ let appState = {
   dayModes: {},
   dayPlans: {},
   selectedMeals: {},
+  swappedStops: {},
+  swappedMeals: {},
   checklist: {},
   prepBookings: {},
   marketBasket: {},
@@ -345,7 +350,24 @@ function resolveDayStopsWithState(day) {
   const overlaid = (typeof koyoPlanner !== 'undefined')
     ? koyoPlanner.overlay(day, activePlan, appState.completedStops)
     : (day.stops || []).map((s, idx) => ({ ...s, origIndex: idx, sid: s.stopId || `${day.id}-s${idx}`, originalTime: s.time, plannerChanged: false }));
-  return overlaid.map(s => resolveMealForStop(day, s, mealChoice));
+  return overlaid.map(s => {
+    const sw = appState.swappedStops && appState.swappedStops[s.sid];
+    const base = sw ? {
+      ...s,
+      name: sw.name,
+      duration: sw.duration || s.duration,
+      details: sw.details,
+      mapsQuery: sw.mapsQuery || sw.name,
+      category: sw.category || s.category,
+      badgeText: sw.badgeText || 'ALTERNATİF',
+      whyForUs: sw.whyForUs || s.whyForUs,
+      hoursInfo: sw.hoursInfo || 'Güncel saat kontrolü',
+      reservationStatus: sw.reservationStatus || 'Esnek giriş',
+      isSwapped: true,
+      swappedFrom: s.name
+    } : s;
+    return resolveMealForStop(day, base, mealChoice);
+  });
 }
 
 function buildFullDayMapUrl(day) {
@@ -681,8 +703,10 @@ function renderDay(index) {
 
   const lunchOptions = day.lunchOptions || [];
   const dinnerOptions = day.dinnerOptions || [];
-  const activeLunch = lunchOptions[mealChoice.lunchIdx] || lunchOptions[0];
-  const activeDinner = dinnerOptions[mealChoice.dinnerIdx] || dinnerOptions[0];
+  const swLunch = appState.swappedMeals && appState.swappedMeals[`${day.id}_lunch`];
+  const swDinner = appState.swappedMeals && appState.swappedMeals[`${day.id}_dinner`];
+  const activeLunch = swLunch || lunchOptions[mealChoice.lunchIdx] || lunchOptions[0];
+  const activeDinner = swDinner || dinnerOptions[mealChoice.dinnerIdx] || dinnerOptions[0];
 
   let completedCount = 0;
   let nextStop = null;
@@ -842,6 +866,7 @@ function renderDay(index) {
               <div class="stop-main-row">
                 <div style="min-width:0; flex:1;">
                   <h3 class="stop-heading" onclick="toggleStopDrawer('${sid}')">${stop.name}</h3>
+                  ${stop.isSwapped ? `<div class="swap-active-badge">🔄 Alternatif (${stop.swappedFrom} yerine)</div>` : ''}
                   ${stop.activeMealLabel ? `<div class="meal-sync-pill">${ico('utensils')} <span>${stop.activeMealLabel}</span></div>` : ''}
                 </div>
                 <button class="done-check-btn ${isDone ? 'checked' : ''}" onclick="toggleStopDone('${sid}')" title="Tamamlandı Olarak İşaretle" aria-label="Durak Tamamlandı">
@@ -852,6 +877,8 @@ function renderDay(index) {
               <div class="stop-quick-actions">
                 <a href="${placeUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Konum</span></a>
                 <a href="${dirUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-route">${ico('route')} <span>Yol Tarifi</span></a>
+                ${!isBooked ? `<button class="action-chip swap-pill-btn" onclick="openSwapModal('${day.id}', ${sIdx}, 'experiencePlus')">🔄 <span>Değiştir</span></button>` : ''}
+                ${stop.isSwapped ? `<button class="action-chip" onclick="revertStopSwap('${sid}')">↩️ <span>Orijinal</span></button>` : ''}
                 <button class="action-chip expand-trigger" onclick="toggleStopDrawer('${sid}')" id="trig-${sid}">
                   ${isOpen ? 'Özet ▴' : 'Detaylar ▾'}
                 </button>
@@ -1100,8 +1127,9 @@ function renderDay(index) {
 }
 
 function renderMealOptionBlock(dayId, mealType, titleLabel, options, activeIdx) {
-  if (!options || !options.length) return '';
-  const opt = options[activeIdx] || options[0];
+  const swMeal = appState.swappedMeals && appState.swappedMeals[`${dayId}_${mealType}`];
+  if (!swMeal && (!options || !options.length)) return '';
+  const opt = swMeal || options[activeIdx] || options[0];
   const mapUrl = buildPlaceUrl(mapFieldText(opt, 'mapsQuery', opt.name));
   const perPerson = Number(opt.costPerPersonJPY) || 0;
   const meterPct = Math.min(100, Math.round((perPerson / 3000) * 100));
@@ -1156,8 +1184,10 @@ function renderMealOptionBlock(dayId, mealType, titleLabel, options, activeIdx) 
           <div style="margin-top:2px;">• <strong>Sonraki Durağa:</strong> ${opt.transitToNext.summary} (${opt.transitToNext.walkMin} dk, ¥${opt.transitToNext.farePerPerson})</div>
         </div>
 
-        <div style="margin-top:9px; display:flex; gap:8px;">
+        <div style="margin-top:9px; display:flex; gap:8px; flex-wrap:wrap;">
           <a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Restoran Konumu</span></a>
+          <button class="action-chip swap-pill-btn" onclick="openMealSwapModal('${dayId}', '${mealType}')">🔄 <span>Başka Helal Seçenek</span></button>
+          ${swMeal ? `<button class="action-chip" onclick="revertMealSwap('${dayId}', '${mealType}')">↩️ <span>Orijinal</span></button>` : ''}
         </div>
       </div>
     </div>
@@ -1234,7 +1264,9 @@ function renderHalal() {
   const container = document.getElementById('halal-container');
   if (!container) return;
 
+  const dirCount = (halalData.halalDirectory || []).length;
   const subtabs = [
+    { id: 'restaurants', label: `Helal Restoranlar (${dirCount})` },
     { id: 'markets', label: 'Konaklama Marketleri' },
     { id: 'basket', label: 'Doğrulanmış Sepet' },
     { id: 'phrases', label: 'Kart & Pazarlık' },
@@ -1243,7 +1275,36 @@ function renderHalal() {
 
   let bodyHtml = '';
 
-  if (currentHalalSubtab === 'markets') {
+  if (currentHalalSubtab === 'restaurants') {
+    const dir = halalData.halalDirectory || [];
+    const cities = ['Tümü', ...new Set(dir.map(r => r.city))];
+    const filteredDir = currentHalalCity === 'Tümü' ? dir : dir.filter(r => r.city === currentHalalCity);
+    bodyHtml = `
+      <div class="pill-filter-row" style="margin-bottom:12px;">
+        ${cities.map(c => `<button class="filter-pill-btn ${c === currentHalalCity ? 'active' : ''}" onclick="filterHalalCity('${escapeAttr(c)}')">${c}</button>`).join('')}
+      </div>
+      <div class="grid-2col">
+        ${filteredDir.map(r => `
+          <div class="editorial-card" style="margin-bottom:0; border-left:4px solid var(--matcha);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+              <span class="halal-verify-badge">${ico('shield')} ${r.halalStatus}</span>
+              ${r.prayerRoom ? `<span class="prayer-badge">🕌 Mescit Var</span>` : ''}
+            </div>
+            <h3 style="font-size:0.98rem; font-weight:800; color:var(--text-main); margin-bottom:2px;">${r.name}</h3>
+            <div style="font-size:0.75rem; font-weight:700; color:var(--sky); margin-bottom:6px;">${r.city} • ${r.area} • ${r.cuisine}</div>
+            <p style="font-size:0.81rem; color:var(--text-secondary); margin-bottom:6px;"><strong>Ne Yenir:</strong> ${r.mustTry}</p>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:8px;">${r.whyGreat}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">
+              <span class="tabular" style="font-weight:800; color:var(--vermilion);">${r.priceRange}</span>
+              <span>🕒 ${r.hours}</span>
+            </div>
+            <a href="${buildPlaceUrl(r.mapsQuery || r.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Haritada Aç</span></a>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else if (currentHalalSubtab === 'markets') {
+    const extraMkts = (halalData.extraMarketGuides || []);
     bodyHtml = `<div class="grid-2col">${(halalData.accommodationMarkets || []).map(hub => `
       <div class="editorial-card" style="margin-bottom:0;">
         <span class="section-eyebrow">Gerçek Şube Rehberi</span>
@@ -1265,7 +1326,27 @@ function renderHalal() {
           `).join('')}
         </div>
       </div>
-    `).join('')}</div>`;
+    `).join('')}</div>
+    ${extraMkts.length ? `
+      <div class="editorial-card" style="margin-top:14px; border-left:4px solid var(--sky);">
+        <span class="section-eyebrow" style="color:var(--sky);">Ek Süpermarket &amp; Konbini Rehberi</span>
+        <h3 style="font-size:1.02rem; font-weight:800; margin-bottom:8px;">Üslerimize Yakın 8 Büyük Süpermarket (Gyomu / Life / Aeon / Hanamasa)</h3>
+        <div class="grid-2col">
+          ${extraMkts.map(m => `
+            <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
+              <div style="display:flex; justify-content:space-between; gap:6px;">
+                <strong style="font-size:0.9rem;">${m.store}</strong>
+                <span class="stop-cat-tag">${m.hub}</span>
+              </div>
+              <div style="font-size:0.74rem; color:var(--sky); font-weight:700; margin:3px 0;">${m.type} • ${m.hours}</div>
+              <p style="font-size:0.79rem; color:var(--text-secondary); margin-bottom:4px;"><strong>En İyisi:</strong> ${m.bestFor}</p>
+              <p style="font-size:0.77rem; color:var(--matcha); margin-bottom:8px;"><strong>Helal İpucu:</strong> ${m.halalTip}</p>
+              <a href="${buildPlaceUrl(m.mapsQuery || m.store)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Konum</span></a>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}`;
   } else if (currentHalalSubtab === 'basket') {
     const doneBasket = (halalData.marketBasketItems || []).filter(i => appState.marketBasket[i.id]).length;
     const totalBasket = (halalData.marketBasketItems || []).length;
@@ -1445,6 +1526,8 @@ function renderHalal() {
         <button class="subtab-seg-btn ${currentHalalSubtab === st.id ? 'active' : ''}" onclick="switchHalalSubtab('${st.id}')">${st.label}</button>
       `).join('')}
     </div>
+
+    ${renderKonbiniLabelInfographic()}
 
     ${bodyHtml}
   `;
@@ -1641,14 +1724,24 @@ function renderShopping() {
           </div>
         </div>
       </div>
+      <div style="margin-top:14px;">${renderTaxFreeInfographic()}</div>
     `;
     recalcKasaHakemi();
     loadStoreCompareInputs();
     return;
   }
 
+  const activeDay = itineraryData[currentDayIndex] || itineraryData[0];
+  const activeCityTag = (activeDay && activeDay.city) ? activeDay.city.split('/')[0].trim() : 'Tokyo';
   const categories = ['Tümü', ...new Set(shoppingData.map(s => s.category))];
-  const filtered = currentShopCategory === 'Tümü' ? shoppingData : shoppingData.filter(s => s.category === currentShopCategory);
+  let filtered = currentShopCategory === 'Tümü' ? shoppingData : shoppingData.filter(s => s.category === currentShopCategory);
+  if (currentShopHubOnly) {
+    const hubMatches = filtered.filter(s => {
+      const tags = (s.hubTags || []).join(' ') + ' ' + (s.citiesAndShops || []).join(' ');
+      return tags.toLowerCase().includes(activeCityTag.toLowerCase()) || (activeCityTag === 'Tokyo' && tags.toLowerCase().includes('shinjuku'));
+    });
+    if (hubMatches.length) filtered = hubMatches;
+  }
 
   const fx = getFxRate();
   let boughtCount = 0;
@@ -1720,6 +1813,7 @@ function renderShopping() {
     </div>
 
     <div class="pill-filter-row">
+      <button class="filter-pill-btn ${currentShopHubOnly ? 'active' : ''}" onclick="toggleShopHubOnly()">📍 Bugünkü Semt (${activeCityTag})</button>
       ${categories.map(cat => `<button class="filter-pill-btn ${cat === currentShopCategory ? 'active' : ''}" onclick="filterShopping('${escapeAttr(cat)}')">${cat}</button>`).join('')}
     </div>
 
@@ -2087,6 +2181,8 @@ function renderBudget() {
       <span class="section-eyebrow">İki Kişilik Finansal Kontrol</span>
       <h2 class="section-title">Bütçe, Kur &amp; Harcama Defteri</h2>
     </div>
+
+    ${renderBudgetInfographic(spentByCat, totalSpentJPY, actualSpentJPY, estimatedSpentJPY)}
 
     <div class="grid-2col">
       <div>
@@ -2757,6 +2853,7 @@ function openWalletModal() {
 
   body.innerHTML = `
     ${flightExitHtml}
+    <div style="margin-bottom:14px;">${renderTransitGateInfographic()}</div>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
       <h3 style="font-size:0.96rem; font-weight:800; color:var(--shinkansen);">Alınmış Tren &amp; Otobüs Biletlerimiz (${bookedTicketsData.length} Sefer)</h3>
       <button class="action-chip map-route" onclick="downloadTripICS()">${ico('calendar')} <span>.ics Ekle</span></button>
@@ -3309,6 +3406,7 @@ function openOverviewModal() {
       </div>
       <button class="action-chip map-route" onclick="jumpToTodayTripDay()">${ico('calendar')} <span>Bugüne Atla</span></button>
     </div>
+    ${renderTripTempoInfographic()}
     <div class="overview-grid">
       ${cardsHtml}
     </div>
@@ -3924,4 +4022,342 @@ if (typeof window !== 'undefined') {
   ) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
+}
+
+
+// === V15: INTERACTIVE SWAP ENGINE & 5 SVG INFOGRAPHICS ===
+function filterHalalCity(city) {
+  currentHalalCity = city;
+  renderHalal();
+}
+
+function toggleShopHubOnly() {
+  currentShopHubOnly = !currentShopHubOnly;
+  renderShopping();
+}
+
+function closeSwapModal() {
+  const m = document.getElementById('swap-modal');
+  if (m) m.classList.remove('open');
+}
+
+function openSwapModal(dayId, sIdx, mode) {
+  const day = itineraryData.find(d => d.id === dayId);
+  if (!day || !day.stops[sIdx]) return;
+  const origStop = day.stops[sIdx];
+  const sid = origStop.stopId || `${day.id}-s${sIdx}`;
+  currentSwapCtx = { type: 'stop', dayId, sIdx, sid, mode: mode || 'experiencePlus' };
+
+  const bank = (typeof EMBEDDED_SWAP_BANK !== 'undefined' && EMBEDDED_SWAP_BANK.stopSwapBank) ? EMBEDDED_SWAP_BANK.stopSwapBank : {};
+  const modes = [
+    { id: 'experiencePlus', label: '✨ Özel Deneyim' },
+    { id: 'rainy', label: '☔ Yağmurlu' },
+    { id: 'lowEnergy', label: '🪫 Yorulduk' },
+    { id: 'skipCrowd', label: '👥 Kalabalık' }
+  ];
+  const activeMode = bank[currentSwapCtx.mode] ? currentSwapCtx.mode : 'experiencePlus';
+  const dayCity = (day.city || 'Tokyo').toLowerCase();
+  const pool = bank[activeMode] || [];
+  const cityMatches = pool.filter(x => dayCity.includes(x.city.toLowerCase()) || x.city.toLowerCase().includes(dayCity.split('/')[0].trim()));
+  const list = cityMatches.length ? cityMatches : pool;
+
+  const titleEl = document.getElementById('swap-modal-title');
+  const bodyEl = document.getElementById('swap-modal-body');
+  if (titleEl) titleEl.textContent = `${origStop.name} → Alternatif Seç`;
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `
+    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:10px;">
+      Mod seçin ve <strong>${origStop.time}</strong> saatindeki durağı tek dokunuşla değiştirin (dilediğiniz an <em>Orijinal</em>'e dönebilirsiniz):
+    </p>
+    <div class="pill-filter-row" style="margin-bottom:12px;">
+      ${modes.map(m => `<button class="filter-pill-btn ${m.id === activeMode ? 'active' : ''}" onclick="openSwapModal('${dayId}', ${sIdx}, '${m.id}')">${m.label}</button>`).join('')}
+    </div>
+    <div>
+      ${list.map(alt => `
+        <div class="swap-opt-card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;">
+            <strong style="font-size:0.93rem; color:var(--text-main);">${alt.name}</strong>
+            <span class="stop-cat-tag">${alt.city} • ${alt.duration}</span>
+          </div>
+          <div style="font-size:0.74rem; font-weight:700; color:var(--sky); margin-bottom:5px;">${alt.badgeText || alt.modeLabel}</div>
+          <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px;">${alt.details}</p>
+          <p style="font-size:0.76rem; color:var(--matcha); margin-bottom:8px;"><strong>Neden İyi:</strong> ${alt.whyForUs}</p>
+          <button class="action-chip map-route" onclick="applyStopSwap('${dayId}', ${sIdx}, '${alt.id}', '${activeMode}')">🔄 <span>Bu Alternatifi Uygula</span></button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  const modal = document.getElementById('swap-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function applyStopSwap(dayId, sIdx, altId, mode) {
+  const day = itineraryData.find(d => d.id === dayId);
+  const bank = (typeof EMBEDDED_SWAP_BANK !== 'undefined' && EMBEDDED_SWAP_BANK.stopSwapBank) ? EMBEDDED_SWAP_BANK.stopSwapBank : {};
+  const alt = (bank[mode] || []).find(x => x.id === altId);
+  if (!day || !day.stops[sIdx] || !alt) return;
+  const sid = day.stops[sIdx].stopId || `${day.id}-s${sIdx}`;
+  if (!appState.swappedStops) appState.swappedStops = {};
+  appState.swappedStops[sid] = alt;
+  saveMasterState();
+  closeSwapModal();
+  renderDay(currentDayIndex);
+  showToast(`Durak güncellendi: ${alt.name}`);
+}
+
+function revertStopSwap(sid) {
+  if (appState.swappedStops && appState.swappedStops[sid]) {
+    delete appState.swappedStops[sid];
+    saveMasterState();
+    renderDay(currentDayIndex);
+    showToast('Orijinal durağa dönüldü');
+  }
+}
+
+function openMealSwapModal(dayId, mealType) {
+  const day = itineraryData.find(d => d.id === dayId);
+  if (!day) return;
+  const bank = (typeof EMBEDDED_SWAP_BANK !== 'undefined' && EMBEDDED_SWAP_BANK.mealSwapOptions) ? EMBEDDED_SWAP_BANK.mealSwapOptions : {};
+  const rawCity = (day.city || 'Tokyo');
+  let cityKey = 'Tokyo';
+  if (rawCity.includes('Kyoto')) cityKey = 'Kyoto';
+  else if (rawCity.includes('Osaka') || rawCity.includes('Himeji')) cityKey = 'Osaka';
+  else if (rawCity.includes('Nara')) cityKey = 'Nara';
+  else if (rawCity.includes('Kawaguchiko')) cityKey = 'Kawaguchiko';
+
+  const options = bank[cityKey] || bank.Tokyo || [];
+  const titleEl = document.getElementById('swap-modal-title');
+  const bodyEl = document.getElementById('swap-modal-body');
+  if (titleEl) titleEl.textContent = `${cityKey} • Helal ${mealType === 'lunch' ? 'Öğle' : 'Akşam'} Alternatifleri`;
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `
+    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:10px;">
+      Tüm seçenekler <strong>domuzsuz, alkolsüz ve mirinsiz</strong> olarak filtrelenmiştir:
+    </p>
+    ${options.map((opt, idx) => `
+      <div class="swap-opt-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
+          <span class="halal-verify-badge">${ico('shield')} ${opt.halalBasis}</span>
+          <span class="tabular" style="font-weight:800; color:var(--vermilion); font-size:0.82rem;">~¥${opt.costPerPersonJPY.toLocaleString()} / kişi</span>
+        </div>
+        <strong style="font-size:0.94rem; color:var(--text-main); display:block; margin-bottom:2px;">${opt.name} <span style="font-weight:500; font-size:0.78rem; color:var(--text-muted);">(${opt.cuisine})</span></strong>
+        <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px;"><strong>Sipariş:</strong> ${opt.recommendedOrder}</p>
+        <button class="action-chip map-route" onclick="applyMealSwap('${dayId}', '${mealType}', '${cityKey}', ${idx})">🔄 <span>Bu Restoranı Seç</span></button>
+      </div>
+    `).join('')}
+  `;
+  const modal = document.getElementById('swap-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function applyMealSwap(dayId, mealType, cityKey, idx) {
+  const bank = (typeof EMBEDDED_SWAP_BANK !== 'undefined' && EMBEDDED_SWAP_BANK.mealSwapOptions) ? EMBEDDED_SWAP_BANK.mealSwapOptions : {};
+  const opt = (bank[cityKey] || bank.Tokyo || [])[idx];
+  if (!opt) return;
+  if (!appState.swappedMeals) appState.swappedMeals = {};
+  appState.swappedMeals[`${dayId}_${mealType}`] = opt;
+  saveMasterState();
+  closeSwapModal();
+  renderDay(currentDayIndex);
+  showToast(`Öğün güncellendi: ${opt.name}`);
+}
+
+function revertMealSwap(dayId, mealType) {
+  if (appState.swappedMeals && appState.swappedMeals[`${dayId}_${mealType}`]) {
+    delete appState.swappedMeals[`${dayId}_${mealType}`];
+    saveMasterState();
+    renderDay(currentDayIndex);
+    showToast('Orijinal öğüne dönüldü');
+  }
+}
+
+// === 1. İNFOGRAFİK: KONBİNİ & MARKET ETİKET OKUMA ===
+function renderKonbiniLabelInfographic() {
+  return `
+    <div class="infographic-card" style="border-left:4px solid var(--matcha);">
+      <div class="infographic-head">
+        <div>
+          <span class="section-eyebrow" style="color:var(--matcha);">Görsel Hızlı Rehber • İnfografik 1</span>
+          <h3 style="font-size:1rem; font-weight:800;">Konbini &amp; Market Etiket Kontrolü (3 Saniyede Oku)</h3>
+        </div>
+        <span class="halal-verify-badge">Domuz &amp; Alkol Sıfır</span>
+      </div>
+      <div class="infographic-svg-wrap">
+        <svg viewBox="0 0 640 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Konbini etiket kontrol akışı">
+          <rect x="4" y="8" width="196" height="104" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+          <text x="16" y="30" font-size="12" font-weight="800" fill="#991b1b">1. KIRMIZI ALARM (BIRAK)</text>
+          <text x="16" y="52" font-size="15" font-weight="900" fill="#7f1d1d">豚 / ポーク / ラード</text>
+          <text x="16" y="70" font-size="11" fill="#991b1b">Domuz eti, özütü, lard yağı</text>
+          <text x="16" y="92" font-size="14" font-weight="900" fill="#7f1d1d">酒・みりん・ゼラチン</text>
+          <text x="16" y="106" font-size="10.5" fill="#991b1b">Alkol, mirin, hayvansal jelatin</text>
+
+          <path d="M206 60 L224 60" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)"/>
+          <rect x="228" y="8" width="190" height="104" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+          <text x="240" y="30" font-size="12" font-weight="800" fill="#92400e">2. SARI KONTROL (SOYA/SOS)</text>
+          <text x="240" y="52" font-size="14" font-weight="900" fill="#78350f">醤油・だし・乳化剤</text>
+          <text x="240" y="70" font-size="11" fill="#92400e">Soya sosunda alkol (酒精),</text>
+          <text x="240" y="86" font-size="11" fill="#92400e">belirsiz dashi / emülgatör</text>
+          <text x="240" y="104" font-size="10.5" font-weight="700" fill="#b45309">Şüpheli ise sade ürüne geç</text>
+
+          <path d="M424 60 L442 60" stroke="#64748b" stroke-width="2.5"/>
+          <rect x="446" y="8" width="190" height="104" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+          <text x="458" y="30" font-size="12" font-weight="800" fill="#166534">3. YEŞİL GÜVENLİ (AL)</text>
+          <text x="458" y="52" font-size="14" font-weight="900" fill="#14532d">塩むすび・紅鮭・抹茶</text>
+          <text x="458" y="70" font-size="11" fill="#166534">Tuzlu onigiri, sade somon,</text>
+          <text x="458" y="86" font-size="11" fill="#166534">haşlanmış yumurta, saf çay,</text>
+          <text x="458" y="104" font-size="10.5" font-weight="700" fill="#15803d">taze meyve, süt, sade yoğurt</text>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+// === 2. İNFOGRAFİK: TAX-FREE (%10) & VALİZ AKIŞI ===
+function renderTaxFreeInfographic() {
+  const tf = (typeof EMBEDDED_TAXFREE_INFO !== 'undefined') ? EMBEDDED_TAXFREE_INFO : { minSpendJPY: 5000, rate: '%10', consumableSealWarning: 'Kozmetik ve gıda mühürlü poşette kalır, Japonya içinde açılmaz.' };
+  return `
+    <div class="infographic-card" style="border-left:4px solid var(--sky);">
+      <div class="infographic-head">
+        <div>
+          <span class="section-eyebrow" style="color:var(--sky);">Görsel Akış • İnfografik 2</span>
+          <h3 style="font-size:1rem; font-weight:800;">Tax-Free (${tf.rate}) &amp; Valiz Mühür Kuralları</h3>
+        </div>
+        <span class="price-verify-badge">Alt Sınır ¥${(tf.minSpendJPY || 5000).toLocaleString()}+</span>
+      </div>
+      <div class="infographic-svg-wrap">
+        <svg viewBox="0 0 640 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tax free akış şeması">
+          <rect x="4" y="10" width="144" height="80" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+          <text x="16" y="34" font-size="12" font-weight="800" fill="#0369a1">1. KASADA HARCAMA</text>
+          <text x="16" y="54" font-size="11" fill="#0c4a6e">Aynı gün aynı mağazada</text>
+          <text x="16" y="70" font-size="12" font-weight="800" fill="#0369a1">¥5.500+ (vergi dahil)</text>
+
+          <rect x="166" y="10" width="144" height="80" rx="10" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+          <text x="178" y="34" font-size="12" font-weight="800" fill="#3730a3">2. PASAPORT KAYDI</text>
+          <text x="178" y="54" font-size="11" fill="#312e81">Orijinal pasaport şart</text>
+          <text x="178" y="70" font-size="11" fill="#312e81">(fotoğraf kabul edilmez)</text>
+
+          <rect x="328" y="10" width="144" height="80" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+          <text x="340" y="34" font-size="12" font-weight="800" fill="#92400e">3. MÜHÜR AYRIMI</text>
+          <text x="340" y="54" font-size="11" fill="#78350f">Kamera/Saat: Kullanılır</text>
+          <text x="340" y="70" font-size="11" font-weight="700" fill="#b45309">Gıda/Kozmetik: MÜHÜRLÜ</text>
+
+          <rect x="490" y="10" width="146" height="80" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+          <text x="502" y="34" font-size="12" font-weight="800" fill="#166534">4. HANEDA T3 KİOSK</text>
+          <text x="502" y="54" font-size="11" fill="#14532d">Check-in ÖNCESİ</text>
+          <text x="502" y="70" font-size="11" font-weight="700" fill="#15803d">Pasaport tarat &amp; iade al</text>
+        </svg>
+      </div>
+      <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:8px;"><strong>Kritik Not:</strong> ${tf.consumableSealWarning}</p>
+    </div>
+  `;
+}
+
+// === 3. İNFOGRAFİK: BÜTÇE & HARCAMA DAĞILIMI ===
+function renderBudgetInfographic(spentByCat, totalSpentJPY, actualSpentJPY, estimatedSpentJPY) {
+  const totalBudget = Math.max(1, budgetData.totalBudgetJPY || 1200000);
+  const usedPct = Math.min(100, Math.round((totalSpentJPY / totalBudget) * 100));
+  const actualPct = Math.min(100, Math.round((actualSpentJPY / totalBudget) * 100));
+  const estPct = Math.min(100 - actualPct, Math.round((estimatedSpentJPY / totalBudget) * 100));
+  const bars = (budgetData.categories || []).slice(0, 6).map((c, i) => {
+    const spent = spentByCat[c.category] || 0;
+    const pct = Math.min(100, Math.round((spent / Math.max(1, c.budgetJPY)) * 100));
+    const y = 14 + i * 22;
+    const color = pct > 90 ? '#dc2626' : (pct > 60 ? '#d97706' : '#16a34a');
+    return `
+      <text x="4" y="${y + 11}" font-size="10.5" font-weight="700" fill="#334155">${escapeHtml(c.category.slice(0, 22))}</text>
+      <rect x="175" y="${y}" width="370" height="14" rx="7" fill="#e2e8f0"/>
+      <rect x="175" y="${y}" width="${Math.max(4, Math.round(370 * pct / 100))}" height="14" rx="7" fill="${color}"/>
+      <text x="554" y="${y + 11}" font-size="10.5" font-weight="800" fill="#0f172a">${pct}%</text>
+    `;
+  }).join('');
+
+  return `
+    <div class="infographic-card" style="border-left:4px solid var(--vermilion);">
+      <div class="infographic-head">
+        <div>
+          <span class="section-eyebrow" style="color:var(--vermilion);">Canlı Grafik • İnfografik 3</span>
+          <h3 style="font-size:1rem; font-weight:800;">Kategori Bazlı Bütçe Tüketimi (%${usedPct} Kullanıldı)</h3>
+        </div>
+        <span class="tabular" style="font-size:0.78rem; font-weight:800; color:var(--matcha);">Gerçek %${actualPct} • Tahmin %${estPct}</span>
+      </div>
+      <div class="infographic-svg-wrap">
+        <svg viewBox="0 0 600 ${Math.max(60, 20 + (budgetData.categories || []).slice(0, 6).length * 22)}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bütçe dağılım grafiği">
+          ${bars}
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+// === 4. İNFOGRAFİK: 22 GÜNLÜK TEMPO & KŌYŌ ZİRVE GRAFİĞİ ===
+function renderTripTempoInfographic() {
+  const barW = 24;
+  const gap = 4;
+  const bars = itineraryData.map((d, idx) => {
+    const count = (d.stops || []).length;
+    const h = Math.min(72, Math.max(18, count * 11));
+    const x = 10 + idx * (barW + gap);
+    const y = 86 - h;
+    const isKoyoPeak = idx >= 3 && idx <= 16;
+    const fill = idx === currentDayIndex ? '#e11d48' : (isKoyoPeak ? '#ea580c' : '#0284c7');
+    return `
+      <g onclick="closeOverviewModal(); selectDay(${idx});" style="cursor:pointer;">
+        <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="5" fill="${fill}" opacity="${idx === currentDayIndex ? '1' : '0.82'}"/>
+        <text x="${x + 12}" y="102" text-anchor="middle" font-size="9" font-weight="800" fill="#334155">G${idx + 1}</text>
+      </g>
+    `;
+  }).join('');
+  return `
+    <div class="infographic-card" style="margin-bottom:12px; border-left:4px solid var(--gold);">
+      <div class="infographic-head">
+        <div>
+          <span class="section-eyebrow" style="color:var(--gold);">22 Günlük Görsel Tempo • İnfografik 4</span>
+          <h3 style="font-size:0.96rem; font-weight:800;">Günlük Durak Yoğunluğu &amp; Kōyō Zirvesi (Çubuğa Tıkla &amp; Git)</h3>
+        </div>
+        <span style="font-size:0.72rem; color:var(--text-muted);">🟠 Kōyō Zirve • 🔴 Seçili Gün</span>
+      </div>
+      <div class="infographic-svg-wrap">
+        <svg viewBox="0 0 636 112" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="22 günlük tempo grafiği">
+          ${bars}
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+// === 5. İNFOGRAFİK: TURNİKE & TREN GEÇİŞ AKIŞI ===
+function renderTransitGateInfographic() {
+  return `
+    <div class="infographic-card" style="border-left:4px solid var(--shinkansen); margin-bottom:0;">
+      <div class="infographic-head">
+        <div>
+          <span class="section-eyebrow" style="color:var(--shinkansen);">Turnike Rehberi • İnfografik 5</span>
+          <h3 style="font-size:0.96rem; font-weight:800;">Japonya Tren Turnikesinden Nasıl Geçilir?</h3>
+        </div>
+      </div>
+      <div class="infographic-svg-wrap">
+        <svg viewBox="0 0 620 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tren turnike geçiş şeması">
+          <rect x="4" y="8" width="194" height="80" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+          <text x="14" y="28" font-size="11.5" font-weight="800" fill="#0369a1">METRO &amp; ŞEHİR İÇİ JR</text>
+          <text x="14" y="47" font-size="11" fill="#0c4a6e">Sadece Suica / ICOCA</text>
+          <text x="14" y="64" font-size="11" fill="#0c4a6e">telefonu/kartı okut</text>
+          <text x="14" y="79" font-size="10" font-weight="700" fill="#0369a1">(Giriş + Çıkışta dokun)</text>
+
+          <rect x="213" y="8" width="194" height="80" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="1.5"/>
+          <text x="223" y="28" font-size="11.5" font-weight="800" fill="#5b21b6">AONİYOSHİ / ROMANTİK</text>
+          <text x="223" y="47" font-size="11" fill="#4c1d95">Turnike: IC Kart (taban)</text>
+          <text x="223" y="64" font-size="11" fill="#4c1d95">Koltuk: Ek Bilet / QR</text>
+          <text x="223" y="79" font-size="10" font-weight="700" fill="#6d28d9">(Torokko'da sadece QR!)</text>
+
+          <rect x="422" y="8" width="194" height="80" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+          <text x="432" y="28" font-size="11.5" font-weight="800" fill="#166534">SHINKANSEN (NOZOMİ)</text>
+          <text x="432" y="47" font-size="11" fill="#14532d">SmartEX QR / IC bağlı</text>
+          <text x="432" y="64" font-size="11" fill="#14532d">Özel Shinkansen Kapısı</text>
+          <text x="432" y="79" font-size="10" font-weight="700" fill="#15803d">(Büyük valiz: Arka koltuk)</text>
+        </svg>
+      </div>
+    </div>
+  `;
 }

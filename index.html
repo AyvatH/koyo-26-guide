@@ -242,6 +242,21 @@
     </div>
   </div>
 
+  <!-- MODAL 7: DURAK & ÖĞÜN ALTERNATİF DEĞİŞTİRİCİ -->
+  <div class="modal-overlay" id="swap-modal" onclick="if(event.target===this)closeSwapModal()">
+    <div class="modal-sheet">
+      <div class="modal-grabber"></div>
+      <div class="modal-header-row">
+        <div>
+          <span class="modal-eyebrow" style="color:var(--matcha);">Akıllı Alternatif Üretici</span>
+          <h2 class="modal-title" id="swap-modal-title">Alternatif Seç &amp; Değiştir</h2>
+        </div>
+        <button class="hdr-btn" onclick="closeSwapModal()">Kapat</button>
+      </div>
+      <div id="swap-modal-body"></div>
+    </div>
+  </div>
+
   <!-- TOAST BİLDİRİM ALANI -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 

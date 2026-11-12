@@ -2443,3 +2443,113 @@ body.dark-mode .tl-marker {
   font-size: 0.77rem;
   line-height: 1.4;
 }
+
+
+/* === V15: INFOGRAPHICS, SWAP ENGINE & HALAL DIRECTORY === */
+.infographic-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 15px 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.infographic-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.infographic-svg-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.infographic-svg-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ig-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (min-width: 600px) {
+  .ig-grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ig-box-avoid {
+  background: rgba(198, 40, 40, 0.06);
+  border: 1px solid rgba(198, 40, 40, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.ig-box-safe {
+  background: rgba(46, 125, 50, 0.06);
+  border: 1px solid rgba(46, 125, 50, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.ig-kanji-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin: 2px 3px 2px 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.swap-pill-btn {
+  background: var(--matcha-soft);
+  color: var(--matcha);
+  border: 1px solid rgba(46, 125, 50, 0.25);
+}
+
+.swap-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--sky-soft);
+  color: var(--sky);
+  margin-top: 4px;
+}
+
+.swap-opt-card {
+  background: var(--card-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.prayer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.69rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--sky-soft);
+  color: var(--sky);
+}
