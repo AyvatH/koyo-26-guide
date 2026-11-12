@@ -1319,10 +1319,13 @@ function renderHalal() {
         <div class="grid-2col">
           ${drinks.map(d => {
             const imgUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(d.brand + ' ' + d.jpName + ' ' + d.product);
+            const thumbHtml = d.imageUrl
+              ? `<img src="${escapeAttr(d.imageUrl)}" alt="${escapeAttr(d.product)}" loading="lazy" style="width:100%; height:100%; object-fit:contain; border-radius:8px; background:#fff;">`
+              : renderBrandThumbSvg(d, 'drink');
             return `
             <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
               <div class="brand-item-row">
-                <div class="brand-visual-thumb">${renderBrandThumbSvg(d, 'drink')}</div>
+                <div class="brand-visual-thumb">${thumbHtml}</div>
                 <div style="min-width:0; flex:1;">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
                     <span class="halal-verify-badge">${d.brand}</span>
@@ -1350,10 +1353,13 @@ function renderHalal() {
         <div class="grid-2col">
           ${snacks.map(s => {
             const imgUrl = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(s.brand + ' ' + s.jpName + ' ' + s.product);
+            const thumbHtml = s.imageUrl
+              ? `<img src="${escapeAttr(s.imageUrl)}" alt="${escapeAttr(s.product)}" loading="lazy" style="width:100%; height:100%; object-fit:contain; border-radius:8px; background:#fff;">`
+              : renderBrandThumbSvg(s, 'snack');
             return `
             <div style="background:var(--card-tint); border:1px solid var(--border); border-radius:var(--radius-md); padding:11px;">
               <div class="brand-item-row">
-                <div class="brand-visual-thumb">${renderBrandThumbSvg(s, 'snack')}</div>
+                <div class="brand-visual-thumb">${thumbHtml}</div>
                 <div style="min-width:0; flex:1;">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:4px;">
                     <span class="price-verify-badge">${s.brand}</span>
@@ -4659,17 +4665,44 @@ function runLocalAiAssistant(raw) {
     };
   }
 
-  // 5. Jump to day number
+  // 5. Date & Day lookup ("26 kasım", "26 kas", "4 aralık", "bugün", "yarın", "gün 5")
+  const formatDaySummary = (dIdx) => {
+    const target = itineraryData[dIdx];
+    const stopsList = (target.stops || []).slice(0, 6).map(s => `• <strong>${s.time}</strong> — ${s.name}`).join('<br>');
+    const lunchName = (target.lunchOptions && target.lunchOptions[0]) ? target.lunchOptions[0].name : '';
+    const dinnerName = (target.dinnerOptions && target.dinnerOptions[0]) ? target.dinnerOptions[0].name : '';
+    return {
+      didAction: false,
+      html: `📅 <strong>Gün ${dIdx + 1} (${target.date} ${target.dayName}) — ${target.city}</strong><br><strong>${target.title}</strong><br><div style="margin:6px 0; font-size:0.79rem;">${stopsList}</div>${lunchName ? `🍽️ <strong>Öğle:</strong> ${lunchName}<br>` : ''}${dinnerName ? `🌙 <strong>Akşam:</strong> ${dinnerName}<br>` : ''}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); selectDay(${dIdx});">Bu Güne Git</button></div>`
+    };
+  };
+
+  if ((q.includes('bugün') || q.includes('ne yapıyoruz') || q.includes('plan')) && !q.match(/\d{1,2}\s*(kasım|kas|aralık|ara)/)) {
+    return formatDaySummary(currentDayIndex);
+  }
+  if (q.includes('yarın')) {
+    return formatDaySummary(Math.min(itineraryData.length - 1, currentDayIndex + 1));
+  }
+  const dateMatch = q.match(/(\d{1,2})\s*(kasım|kas|aralık|ara)/i);
+  if (dateMatch) {
+    const dd = String(parseInt(dateMatch[1], 10)).padStart(2, '0');
+    const mm = dateMatch[2].toLowerCase().startsWith('kas') ? '11' : '12';
+    const iso = `2026-${mm}-${dd}`;
+    const dIdx = itineraryData.findIndex(d => d.date === iso);
+    if (dIdx !== -1) return formatDaySummary(dIdx);
+  }
   const dayMatch = q.match(/gün\s*(\d{1,2})/i);
   if (dayMatch) {
     const dNum = parseInt(dayMatch[1], 10) - 1;
     if (dNum >= 0 && dNum < itineraryData.length) {
-      const target = itineraryData[dNum];
-      return {
-        didAction: true,
-        html: `📅 <strong>Gün ${dNum + 1} (${target.date}):</strong> ${target.title}<div style="margin-top:6px;"><button class="action-chip map-route" onclick="closeAiAssistantModal(); selectDay(${dNum});">Bu Güne Git</button></div>`
-      };
+      return formatDaySummary(dNum);
     }
+  }
+  if (/^(selam|merhaba|hey|slm|mrb|naber)/.test(q) && q.length < 25) {
+    return {
+      didAction: false,
+      html: `Selam! Şu an <strong>Gün ${currentDayIndex + 1} (${curDay.date} • ${curDay.city})</strong> seçili: <em>${curDay.title}</em>.<br>Bana tarih (<em>"26 kasım ne yapıyoruz"</em>), bütçe (<em>"bütçeye 2500 yen ekle"</em>), hava (<em>"yağmur yağıyor"</em>) veya semt/ürün sorabilirsin.`
+    };
   }
 
   // 6. Tickets / Kawaguchiko / Flight lookup
@@ -4699,17 +4732,28 @@ function runLocalAiAssistant(raw) {
     };
   }
 
-  // 8. General keyword search across Itinerary + Halal Directory + Shopping
-  const words = q.split(/\s+/).filter(w => w.length > 2);
+  // 8. General keyword search across Itinerary stops + Halal Directory + Shopping
+  const stopWords = ['ne', 'yapıyoruz', 'var', 'nerede', 'nasıl', 'gideriz', 'selam', 'hey', 'merhaba', 'kasım', 'aralık'];
+  const words = q.split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
   const hits = [];
-  (halalData.halalDirectory || []).forEach(r => {
-    const hay = (r.name + ' ' + r.city + ' ' + r.area + ' ' + r.cuisine).toLowerCase();
-    if (words.some(w => hay.includes(w))) hits.push(`🍽️ <strong>${r.name}</strong> (${r.city} • ${r.priceRange})`);
-  });
-  (shoppingData || []).forEach(s => {
-    const hay = (s.title + ' ' + s.category + ' ' + (s.citiesAndShops || []).join(' ')).toLowerCase();
-    if (words.some(w => hay.includes(w))) hits.push(`🛍️ <strong>${s.title}</strong> (${s.category})`);
-  });
+  if (words.length) {
+    itineraryData.forEach((d, dIdx) => {
+      (d.stops || []).forEach(s => {
+        const hay = (s.name + ' ' + d.city + ' ' + d.title).toLowerCase();
+        if (words.some(w => hay.includes(w))) {
+          hits.push(`📍 <strong>Gün ${dIdx + 1} (${d.date.slice(5)}):</strong> ${s.name} (${s.time}) <button class="action-chip" style="padding:2px 7px; font-size:0.7rem;" onclick="closeAiAssistantModal(); selectDay(${dIdx});">Git</button>`);
+        }
+      });
+    });
+    (halalData.halalDirectory || []).forEach(r => {
+      const hay = (r.name + ' ' + r.city + ' ' + r.area + ' ' + r.cuisine).toLowerCase();
+      if (words.some(w => hay.includes(w))) hits.push(`🍽️ <strong>${r.name}</strong> (${r.city} • ${r.priceRange})`);
+    });
+    (shoppingData || []).forEach(s => {
+      const hay = (s.title + ' ' + s.category + ' ' + (s.citiesAndShops || []).join(' ')).toLowerCase();
+      if (words.some(w => hay.includes(w))) hits.push(`🛍️ <strong>${s.title}</strong> (${s.category})`);
+    });
+  }
   if (hits.length) {
     return { didAction: false, html: `Bulunan eşleşmeler:<br>${hits.slice(0, 5).join('<br>')}` };
   }
