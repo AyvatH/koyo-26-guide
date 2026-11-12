@@ -268,6 +268,48 @@ function formatWeekdayLabel(isoDate, long = false) {
   return (long ? full : short)[date.getUTCDay()];
 }
 
+// Gün / Ay (DD/MM) ve Türkçe Tarih Formatlayıcıları
+function formatDayMonth(dStr, sep = '/') {
+  if (!dStr || typeof dStr !== 'string') return '';
+  const m = dStr.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (m) {
+    const mm = m[2].padStart(2, '0');
+    const dd = m[3].padStart(2, '0');
+    return `${dd}${sep}${mm}`;
+  }
+  const m2 = dStr.match(/^(\d{1,2})[-/.](\d{1,2})$/);
+  if (m2) {
+    const a = parseInt(m2[1], 10);
+    const b = parseInt(m2[2], 10);
+    if (a > 12) return `${m2[1].padStart(2, '0')}${sep}${m2[2].padStart(2, '0')}`;
+    if (b > 12) return `${m2[2].padStart(2, '0')}${sep}${m2[1].padStart(2, '0')}`;
+    return `${m2[2].padStart(2, '0')}${sep}${m2[1].padStart(2, '0')}`;
+  }
+  return dStr;
+}
+
+function formatTurkishDate(isoDate) {
+  if (!isoDate || typeof isoDate !== 'string') return '';
+  const m = isoDate.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (!m) return isoDate;
+  const monthNames = {
+    '1': 'Ocak', '01': 'Ocak', '2': 'Şubat', '02': 'Şubat', '3': 'Mart', '03': 'Mart',
+    '4': 'Nisan', '04': 'Nisan', '5': 'Mayıs', '05': 'Mayıs', '6': 'Haziran', '06': 'Haziran',
+    '7': 'Temmuz', '07': 'Temmuz', '8': 'Ağustos', '08': 'Ağustos', '9': 'Eylül', '09': 'Eylül',
+    '10': 'Ekim', '11': 'Kasım', '12': 'Aralık'
+  };
+  const d = parseInt(m[3], 10);
+  const month = monthNames[m[2]] || m[2];
+  return `${d} ${month}`;
+}
+
+function formatTurkishFullDate(isoDate) {
+  if (!isoDate || typeof isoDate !== 'string') return '';
+  const m = isoDate.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (!m) return isoDate;
+  return `${formatTurkishDate(isoDate)} ${m[1]}`;
+}
+
 function buildQueryString(params) {
   if (typeof URLSearchParams !== 'undefined') return new URLSearchParams(params).toString();
   return Object.keys(params).map(k =>
@@ -519,7 +561,7 @@ function renderDateNav() {
     chip.innerHTML = `
       ${hasBooked ? '<span class="booked-dot" title="Alınmış Tren Bileti Günü"></span>' : ''}
       <span class="day-Label">G${index} • ${shortDay}</span>
-      <span class="day-num">${day.date.substring(5).replace('-', '/')}</span>
+      <span class="day-num">${formatDayMonth(day.date, '/')}</span>
       <span class="day-city">${day.city.split('->').pop().split('/')[0].trim()}</span>
     `;
     chip.addEventListener('click', () => {
@@ -941,7 +983,7 @@ function renderDay(index) {
         <div class="day-hero">
           <div class="day-hero-kanji">${day.kanji || '日本'}</div>
           <div class="day-meta-chips">
-            <span class="hero-badge">${day.date} • ${formatWeekdayLabel(day.date, true)}</span>
+            <span class="hero-badge">${formatTurkishFullDate(day.date)} • ${formatWeekdayLabel(day.date, true)}</span>
             <span class="hero-chip-muted">${day.weatherTemp || '15°C'} • ${day.regionTag || day.city}</span>
             <span class="jst-live-strip tabular">${jstLive.timeStr} • ${jstLive.phaseLabel}</span>
           </div>
@@ -1096,7 +1138,7 @@ function renderDay(index) {
         <!-- KİŞİSEL NOT -->
         <div class="editorial-card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h3 style="font-size:0.95rem; font-weight:800;">${day.date} Kişisel Notumuz</h3>
+            <h3 style="font-size:0.95rem; font-weight:800;">${formatTurkishDate(day.date)} Kişisel Notumuz</h3>
             <span id="note-status-${day.id}" style="font-size:0.74rem; color:var(--matcha); font-weight:700;">Otomatik kayıt aktif</span>
           </div>
           <textarea id="note-input-${day.id}" class="radar-textarea" style="min-height:84px; margin-bottom:0;" oninput="autoSaveDayNote('${day.id}', this.value)" placeholder="Saat/kamera referansı, restoran yorumu veya hatıralar...">${currentNote}</textarea>
@@ -1109,13 +1151,13 @@ function renderDay(index) {
           ${prevDay ? `
             <button class="day-nav-card" onclick="selectDay(${index - 1})">
               <span style="font-size:0.68rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:4px;">${ico('arrowLeft')} ÖNCEKİ GÜN</span>
-              <strong style="font-size:0.86rem; display:block; margin-top:2px;">${prevDay.date.substring(5)} • ${prevDay.city.split('->').pop()}</strong>
+              <strong style="font-size:0.86rem; display:block; margin-top:2px;">${formatDayMonth(prevDay.date, '/')} • ${prevDay.city.split('->').pop()}</strong>
             </button>
           ` : '<div></div>'}
           ${nextDay ? `
             <button class="day-nav-card next" onclick="selectDay(${index + 1})">
               <span style="font-size:0.68rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; justify-content:flex-end; gap:4px;">SONRAKİ GÜN ${ico('arrowRight')}</span>
-              <strong style="font-size:0.86rem; display:block; margin-top:2px;">${nextDay.date.substring(5)} • ${nextDay.city.split('->').pop()}</strong>
+              <strong style="font-size:0.86rem; display:block; margin-top:2px;">${formatDayMonth(nextDay.date, '/')} • ${nextDay.city.split('->').pop()}</strong>
             </button>
           ` : '<div></div>'}
         </div>
@@ -2731,7 +2773,7 @@ function renderCrisisModal() {
   if (currentCrisisMode === 'rain') {
     detailHtml = `
       <div class="editorial-card" style="border-left:4px solid var(--sky); margin-bottom:0;">
-        <h4 style="font-weight:800; margin-bottom:6px;">${day.date} Yağmur B Planı</h4>
+        <h4 style="font-weight:800; margin-bottom:6px;">${formatTurkishDate(day.date)} Yağmur B Planı</h4>
         <p style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:10px;">${day.rainAlternative}</p>
         <button class="hdr-btn hdr-primary" onclick="toggleDayMode('${day.id}', 'rain'); closeCrisisModal(); switchTab('itinerary');" style="width:100%; justify-content:center;">
           Bugünün Sayfasında Yağmur Modunu Aç
@@ -2803,7 +2845,7 @@ function renderCrisisModal() {
 
   body.innerHTML = `
     <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">
-      Aktif Gün: <strong>${day.date} • ${day.title}</strong>
+      Aktif Gün: <strong>${formatTurkishDate(day.date)} • ${day.title}</strong>
     </div>
     <div class="crisis-grid">
       <button class="crisis-option-btn ${currentCrisisMode === 'rain' ? 'active' : ''}" onclick="setCrisisMode('rain')">
@@ -3018,7 +3060,7 @@ function openSyncModal() {
       <div id="sync-preview-container"></div>
     </div>
 
-    <div class="editorial-card" style="margin-bottom:0;">
+    <div class="editorial-card">
       <h4 style="font-size:0.92rem; font-weight:800; margin-bottom:4px;">3. Canlı Bulut Senkronizasyon URL’si (İsteğe Bağlı)</h4>
       <input type="url" id="cloud-sync-input" class="search-input" style="padding:8px 12px; margin-bottom:8px;" placeholder="https://proje-adi.firebaseio.com/japonya.json" value="${appState.cloudSyncUrl || ''}">
       <div style="display:flex; gap:8px;">
@@ -3026,11 +3068,56 @@ function openSyncModal() {
         <button class="action-chip" onclick="pullFromCloudSync()" style="flex:1; justify-content:center;">Buluttan Çek</button>
       </div>
     </div>
+
+    <div class="editorial-card" style="border-left:4px solid var(--vermilion); margin-bottom:0;">
+      <h4 style="font-size:0.92rem; font-weight:800; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+        <span>🔄</span> <span>4. Site Önbelleği &amp; En Yeni Sürüm Yenileme</span>
+      </h4>
+      <p style="font-size:0.80rem; color:var(--text-secondary); margin-bottom:8px;">
+        Yeni bir güncelleme yayınlandığında telefonunuz eski çevrimdışı önbelleği tutuyor olabilir. Bu butona bastığınızda Service Worker ve tarayıcı önbelleği sıfırlanır, en güncel sürüm sunucudan indirilir (kişisel notlarınız ve bütçeniz silinmez).
+      </p>
+      <button class="hdr-btn hdr-primary" onclick="clearSiteCache()" style="width:100%; justify-content:center; border-radius:var(--radius-md); min-height:44px; background:var(--vermilion);">
+        <span>🔄 Önbelleği Temizle &amp; En Yeni Sürümü Yükle</span>
+      </button>
+    </div>
   `;
   modal.classList.add('open');
 }
 
 function closeSyncModal() { const m = document.getElementById('sync-modal'); if (m) m.classList.remove('open'); }
+
+async function clearSiteCache() {
+  const btn = document.getElementById('cache-clear-hdr-btn');
+  if (btn) btn.classList.add('rotating');
+  if (typeof showToast === 'function') {
+    showToast('🔄 Çevrimdışı önbellek temizleniyor, en güncel sürüm alınıyor...');
+  }
+  try {
+    if (typeof caches !== 'undefined' && caches.keys) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(reg => reg.unregister()));
+    }
+    try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+    } catch (e) {}
+    setTimeout(() => {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('_reload', Date.now().toString());
+        window.location.href = u.toString();
+      } catch (e) {
+        window.location.reload(true);
+      }
+    }, 450);
+  } catch (err) {
+    console.error('Cache clear error:', err);
+    window.location.reload(true);
+  }
+}
 
 function shareSyncLink() {
   const payload = btoa(unescape(encodeURIComponent(JSON.stringify(appState))));
@@ -3458,7 +3545,7 @@ function openOverviewModal() {
     return `
       <button class="overview-day-card ${isCurrent ? 'is-current' : ''}" onclick="closeOverviewModal(); selectDay(${idx});">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; width:100%;">
-          <span class="tabular" style="font-size:0.72rem; font-weight:800; color:var(--vermilion);">GÜN ${idx + 1} • ${day.date.slice(5)} (${formatWeekdayLabel(day.date).slice(0, 3)})</span>
+          <span class="tabular" style="font-size:0.72rem; font-weight:800; color:var(--vermilion);">GÜN ${idx + 1} • ${formatDayMonth(day.date, '/')} (${formatWeekdayLabel(day.date).slice(0, 3)})</span>
           <span class="tabular" style="font-size:0.71rem; font-weight:700; color:${done === stops.length && stops.length > 0 ? 'var(--matcha)' : 'var(--text-muted)'};">${done}/${stops.length}</span>
         </div>
         <div style="font-size:0.89rem; font-weight:800; color:var(--text-main); line-height:1.25;">${day.city} — ${day.title}</div>
@@ -3551,7 +3638,7 @@ function handleSearch(term) {
     <div class="grid-2col">
       ${stopResults.map(r => `
         <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
-          <span class="hero-badge" style="background:var(--indigo); display:inline-block; margin-bottom:6px;">Rota • ${r.day.date} (${r.day.city})</span>
+          <span class="hero-badge" style="background:var(--indigo); display:inline-block; margin-bottom:6px;">Rota • ${formatDayMonth(r.day.date, '/')} (${r.day.city})</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${r.stop.time} — ${r.stop.name}</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.stop.details}</p>
           <div style="font-size:0.78rem; font-weight:800; color:var(--vermilion);">Günü Aç →</div>
@@ -3559,7 +3646,7 @@ function handleSearch(term) {
       `).join('')}
       ${mealResults.map(r => `
         <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--matcha);" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
-          <span class="halal-verify-badge" style="margin-bottom:6px;">Helal Restoran • ${r.day.date}</span>
+          <span class="halal-verify-badge" style="margin-bottom:6px;">Helal Restoran • ${formatDayMonth(r.day.date, '/')}</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${r.meal.name} (${r.meal.cuisine})</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.meal.recommendedOrder} • ~¥${r.meal.costPerPersonJPY}/kişi</p>
           <div style="font-size:0.78rem; font-weight:800; color:var(--matcha);">Günün Yemek Planına Git →</div>
@@ -3639,7 +3726,7 @@ function buildAdvisorDeskHtml(dayIdx) {
 
   return `
     <div style="margin-bottom:14px;">
-      <span class="section-eyebrow" style="color:var(--vermilion);">3-Alan Akıllı Plan Denetimi (${day.date})</span>
+      <span class="section-eyebrow" style="color:var(--vermilion);">3-Alan Akıllı Plan Denetimi (${formatTurkishDate(day.date)})</span>
       <div class="advisor-desk-grid">
         <div class="advisor-mini-card" style="border-top:3px solid var(--sky);">
           <div>
@@ -3813,7 +3900,7 @@ function renderPlannerModal() {
 
   body.innerHTML = `
     <div style="margin-bottom:10px; font-size:0.81rem; color:var(--text-secondary);">
-      <strong>${day.date} • ${day.title}</strong> — Alınmış bilet saatleri (Nozomi / Sagano / Aoniyoshi / Uçuşlar) ve 22 Kas 13:00 bit pazarı hedefi otomatik korunur.
+      <strong>${formatTurkishDate(day.date)} • ${day.title}</strong> — Alınmış bilet saatleri (Nozomi / Sagano / Aoniyoshi / Uçuşlar) ve 22 Kas 13:00 bit pazarı hedefi otomatik korunur.
     </div>
 
     <div class="subtab-seg" style="margin-bottom:12px;">
@@ -4004,7 +4091,7 @@ function renderOsmMapBoxHtml(day, stops) {
     <div class="osm-map-card">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <div>
-          <strong style="font-size:0.9rem;">${day.date} • İnteraktif Konum Önizlemesi (${mappedCount} durak)</strong>
+          <strong style="font-size:0.9rem;">${formatTurkishDate(day.date)} • İnteraktif Konum Önizlemesi (${mappedCount} durak)</strong>
           <span style="display:block; font-size:0.73rem; color:var(--text-muted);">OpenStreetMap haritası yalnızca kamusal durakları gösterir; özel ev adresleri haritaya gönderilmez.</span>
         </div>
       </div>
@@ -4517,6 +4604,13 @@ function parseDateIntent(query) {
     const dd = dayNum < 10 ? '0' + dayNum : '' + dayNum;
     return `2026-${monthNum}-${dd}`;
   }
+  const numM = q.match(/(?:^|\D)(2[1-9]|30|[0-2]?[1-9]|1[0-2])[\/.-](11|12)(?:\D|$)/);
+  if (numM) {
+    const dayNum = parseInt(numM[1], 10);
+    const monthNum = numM[2];
+    const dd = dayNum < 10 ? '0' + dayNum : '' + dayNum;
+    return `2026-${monthNum}-${dd}`;
+  }
   return null;
 }
 
@@ -4525,9 +4619,10 @@ function formatDateForSearch(dStr) {
   const parts = dStr.split('-');
   if (parts.length !== 3) return dStr;
   const d = String(parseInt(parts[2], 10));
+  const dd = parts[2];
   const m = parts[1];
   const mTr = m === '11' ? 'kasım kasim kas' : 'aralık aralik ara';
-  return `${d} ${mTr} ${dStr} ${d}.${m}`;
+  return `${d} ${mTr} ${dStr} ${d}.${m} ${dd}.${m} ${d}/${m} ${dd}/${m}`;
 }
 
 const staticFlightRecords = [
@@ -4591,6 +4686,8 @@ function performOmniSearch(rawQuery) {
     if (amt > 0) {
       results.action = { type: 'expense', amount: amt, label: `¥${amt.toLocaleString()} Harcamayı Bütçeye Ekle` };
     }
+  } else if (qNorm.includes('cache') || qNorm.includes('onbellek') || qNorm.includes('yenile') || (qNorm.includes('temizle') && !qNorm.includes('bavul'))) {
+    results.action = { type: 'cache_clear', label: '🔄 Çevrimdışı Önbelleği Temizle & En Yeni Sürümü Yükle' };
   } else if (qNorm.includes('yagmur') || qNorm.includes('islan')) {
     results.action = { type: 'rain', label: 'Bugün için Yağmur Modunu Aç' };
   } else if (qNorm.includes('yorulduk') || qNorm.includes('hafiflet')) {
@@ -4828,6 +4925,9 @@ function executeOmniAction(type, p1, p2) {
     closeAiAssistantModal();
     selectDay(Number(p1) || 0);
     switchTab('itinerary');
+  } else if (type === 'cache_clear') {
+    closeAiAssistantModal();
+    clearSiteCache();
   }
 }
 
@@ -4883,7 +4983,7 @@ function renderOmniSearchResults(results, query) {
           <span class="hero-badge" style="background:var(--vermilion); color:#fff; font-size:0.68rem;">🎯 TAM TARİH EŞLEŞMESİ</span>
           <span class="tabular" style="font-size:0.75rem; font-weight:800; color:var(--vermilion);">GÜN ${dIdx + 1}</span>
         </div>
-        <div class="omni-card-title" style="font-size:1.02rem; margin:4px 0;">${d.date} ${d.dayName} — ${d.city}: ${d.title}</div>
+        <div class="omni-card-title" style="font-size:1.02rem; margin:4px 0;">${formatTurkishDate(d.date)} ${d.dayName} — ${d.city}: ${d.title}</div>
         <div class="omni-card-desc" style="font-size:0.8rem; margin:6px 0;">
           ${stopsList}
           ${lunchName ? `<div style="margin-top:4px; color:var(--matcha);">🍽️ <strong>Öğle:</strong> ${lunchName}</div>` : ''}
@@ -4925,7 +5025,7 @@ function renderOmniSearchResults(results, query) {
       html += `
         <div class="omni-card is-day">
           <div class="omni-card-top">
-            <strong class="omni-card-title">Gün ${d.idx + 1} (${d.date.slice(5)}) — ${d.city}</strong>
+            <strong class="omni-card-title">Gün ${d.idx + 1} (${formatDayMonth(d.date, '/')}) — ${d.city}</strong>
             <span class="stop-cat-tag">${d.stopsCount} Durak</span>
           </div>
           <div class="omni-card-meta">${d.dayName} • ${d.vibe || ''}</div>
@@ -4948,7 +5048,7 @@ function renderOmniSearchResults(results, query) {
             <strong class="omni-card-title">${s.name}</strong>
             <span class="stop-cat-tag">${s.time}</span>
           </div>
-          <div class="omni-card-meta">Gün ${s.dIdx + 1} (${s.date.slice(5)} ${s.dayName || ''}) • ${s.city}</div>
+          <div class="omni-card-meta">Gün ${s.dIdx + 1} (${formatDayMonth(s.date, '/')} ${s.dayName || ''}) • ${s.city}</div>
           <p class="omni-card-desc">${s.details ? s.details.slice(0, 110) + '...' : ''}</p>
           <div class="omni-card-actions">
             <button class="action-chip map-route" onclick="executeOmniAction('jump', ${s.dIdx})">📅 Güne Git</button>
