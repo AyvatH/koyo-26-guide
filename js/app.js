@@ -4782,12 +4782,16 @@ function performOmniSearch(rawQuery) {
 
   // 7. Shopping
   (shoppingData || []).forEach(sh => {
-    const shHay = normalizeOmniText(`${sh.title} ${sh.category} ${(sh.suitableProduct || '')} ${(sh.citiesAndShops || []).join(' ')} ${sh.budgetLimit || ''}`);
+    const prodStr = Array.isArray(sh.suitableProduct) ? sh.suitableProduct.join(' ') : String(sh.suitableProduct || '');
+    const shopsStr = (sh.citiesAndShops || []).join(' ');
+    const inspStr = (sh.inspections || []).join(' ');
+    const shHay = normalizeOmniText(`${sh.title} ${sh.category} ${prodStr} ${shopsStr} ${inspStr} ${sh.budgetLimit || ''} ${sh.currentPrice || ''} ${sh.reasonablePriceRange || ''} ${sh.comparisons || ''}`);
     if (tokens.every(t => shHay.includes(t))) {
       results.shop.push({
+        id: sh.id,
         title: sh.title,
         cat: sh.category,
-        price: sh.reasonablePriceRange,
+        price: sh.currentPrice || sh.reasonablePriceRange,
         shops: sh.citiesAndShops,
         budget: sh.budgetLimit
       });
@@ -5185,6 +5189,12 @@ function updateOmniView() {
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kawaguchiko Otobüs')">🚌 Fuji Otobüsü</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Helal Ramen')">🍜 Helal Ramen</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Otomat İçecekleri')">🥤 Otomat</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kırtasiye Kuru Toga DelGuard')">✏️ Kırtasiye &amp; Kalem</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Niş Parfüm Dirty Rice Nile')">🌸 Niş Parfümler</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Çocuk Giyim Markey Breeze')">👶 Çocuk Giyim</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kai Tırnak Makası Nitori')">✂️ Kai &amp; Mutfak</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Hatıra Madalyonu Kinen Medaru')">🏅 Hatıra Madalyası</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Sakin Eczane Ainz Tulpe')">💄 Sakin Eczane &amp; Ped</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Don Quijote')">🛍️ Donki</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Takadanobaba')">🏠 Evimiz</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Uçuş')">✈️ Uçuşlar</button>
