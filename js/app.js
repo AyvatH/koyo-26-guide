@@ -2363,7 +2363,23 @@ const EMBEDDED_PERSONAL_WISHLIST = [
   { id: 'wl-birthday-miki', name: 'Birthday (Uygun Fiyatlı Çocuk), Beams Mini (Trenli) & Miki House Ayakkabı', category: 'Çocuk Giyim', store: 'Lalaport Toyosu & Shinjuku Takashimaya 9F', priceHint: '¥600 – ¥15.000', cardId: 'curated-kids-apparel', note: 'Miki House ilk adım ortopedik ayakkabı' },
   { id: 'wl-sofy-tabio', name: 'Sofy Hada Omoi (%100 Organik Pamuk Ped), Tabio Çorap & Muji Pijama', category: 'Kozmetik & Giyim', store: 'Ainz & Tulpe + Tabio (Kutsushitaya) + MUJI', priceHint: '¥400 – ¥4.900', cardId: 'curated-quiet-drugstores-cosmetics', note: 'Atsugi kaçmayan ince kadın çorabı dahil' },
   { id: 'wl-skincare-calm', name: 'Curel Nemlendirici, Canmake Mermaid Tinted UV, Sana Göz Kremi & Melty Lip', category: 'Kozmetik & Bakım', store: '1. Ainz & Tulpe (Sakin) / 2. Sun Drug (Ucuz)', priceHint: '¥600 – ¥2.500', cardId: 'curated-quiet-drugstores-cosmetics', note: 'Cow Brand Bouncia köpük duş jeli & &honey şampuan' },
-  { id: 'wl-medals', name: 'Hatıra Madalyonları (Kinen Medaru: Tokyo Gov 45F, Fuji 5th, Osaka Kalesi)', category: 'Hatıra & Koleksiyon', store: 'Tokyo Gov 45F • Mt. Fuji 5th • Osaka Castle', priceHint: '¥600 – ¥900 (+¥50 Tarih/İsim Kazıma)', cardId: 'curated-souvenir-medal-coins', note: 'Yanınızda ¥100 ve ¥10 madeni para bulundurun' }
+  { id: 'wl-medals', name: 'Hatıra Madalyonları (Kinen Medaru: Tokyo Gov 45F, Fuji 5th, Osaka Kalesi)', category: 'Hatıra & Koleksiyon', store: 'Tokyo Gov 45F • Mt. Fuji 5th • Osaka Castle', priceHint: '¥600 – ¥900 (+¥50 Tarih/İsim Kazıma)', cardId: 'curated-souvenir-medal-coins', note: 'Yanınızda ¥100 ve ¥10 madeni para bulundurun' },
+  { id: 'wl-m5stack-cardputer-cores3', name: 'M5Stack Cardputer (Klavyeli ESP32-S3) & M5Stack CoreS3 / StickC Plus2', category: 'Gömülü Sistem & Elektronik', store: 'Marutsu Akihabara (Switch Science) / Sengoku Densho / Silicon House Osaka (Evimize 6 dk!)', priceHint: '¥3.600 – ¥8.900 ($24–$59)', cardId: 'curated-embedded-sbc-sensors', note: 'Dahili LiPo bataryalı olduğu için uçakta KABİN (el) bagajında taşınır' },
+  { id: 'wl-m5stack-grove-units', name: 'M5Stack Grove Sensör Modülleri (ENV IV, ToF VL53L1X, Thermal, RFID, Roller485)', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho (Akihabara & Osaka) / Silicon House Kyohritsu 1F', priceHint: '¥850 – ¥4.500 ($6–$30)', cardId: 'curated-embedded-sbc-sensors', note: 'Küçük tak-çalıştır I2C/UART modülleri ve Grove kablolarını yedekleyin' },
+  { id: 'wl-rpi5-ai-camera-hat', name: 'Raspberry Pi 5 (8GB/16GB) + Sony IMX500 AI Camera veya Hailo-8L AI Kit', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho / Silicon House Osaka / Tsukumo Robot Kingdom', priceHint: '¥12.200 – ¥21.500 ($81–$143)', cardId: 'curated-embedded-sbc-sensors', note: 'Sony IMX500 üzerinde yerleşik NPU bulunan resmi AI kamera modülü' },
+  { id: 'wl-xiao-pico2-uno', name: 'Seeed XIAO ESP32S3 Sense (Kamera+Mikrofon), RPi Pico 2 (RP2350) & Arduino Uno R4 WiFi', category: 'Gömülü Sistem & Elektronik', store: 'Akizuki Denshi Tsusho (Akihabara) / Sengoku Densho / Silicon House', priceHint: '¥950 – ¥4.600 ($6–$31)', cardId: 'curated-embedded-sbc-sensors', note: 'Akizuki den ¥200 lük sert plastik parça kutusu alıp kartları içine koyun' },
+  { id: 'wl-engineer-ss02', name: 'ENGINEER SS-02 Silikon Uçlu Alüminyum Lehim Pompası (Made in Japan - Osaka)', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho (Osaka Evimize 6 dk / Akihabara) / Silicon House 2F / Yodobashi', priceHint: '~¥1.800 ($12)', cardId: 'curated-japanese-hardware-tools', note: 'Yurt dışında $35+; havya ucuna doğrudan değebilen yedek silikon hortumlu efsane' },
+  { id: 'wl-engineer-pa09-crimper', name: 'ENGINEER PA-09 (veya PAD-11) Hassas JST / Molex / Dupont Konnektör Sıkma Pensesi', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho / Silicon House Kyohritsu 2F / Yodobashi Camera', priceHint: '¥4.100 – ¥5.200 ($27–$35)', cardId: 'curated-japanese-hardware-tools', note: 'KESİNLİKLE UÇAK ALTI (Check-in) VALİZE KONMALI — el bagajında el konulur!' },
+  { id: 'wl-engineer-pz58-ns04', name: 'ENGINEER PZ-58 Neji-Saurus Vida Sökücü Pense, NS-04 Mikro Yan Keski & PTZ-41 Seramik Cımbız', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho / Silicon House 2F (Osaka Evimize 6 dk)', priceHint: '¥1.400 – ¥2.100 ($9–$14)', cardId: 'curated-japanese-hardware-tools', note: 'Yalama vidaları söken yeşil saplı Japon klasiği (Uçak altı check-in valize!)' },
+  { id: 'wl-hioki-3244-multimeter', name: 'HIOKI 3244-60 Card HiTester Kredi Kartı Boyutunda Cep Multimetresi (veya Sanwa PM3)', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho / Silicon House 2F / Yodobashi Camera', priceHint: '¥4.500 – ¥4.900 ($30–$33)', cardId: 'curated-japanese-hardware-tools', note: '9.5 mm inceliğinde, 60g, altın kaplama problu %100 Made in Japan multimetre' },
+  { id: 'wl-hakko-goot-solder', name: 'HAKKO 599B Pirinç Uç Temizleyici, Orijinal Hakko T18/T12 Uçlar & Goot Wick Lehim Fitili', category: 'Gömülü Sistem & Elektronik', store: 'Sengoku Densho / Silicon House 2F / Akihabara Radio Dept.', priceHint: '¥280 – ¥950 ($2–$6.50)', cardId: 'curated-japanese-hardware-tools', note: 'DİKKAT: 100V AC fişli havya Türkiye 220V prizde yanar; sadece uç/aksesuar veya USB-C PD havya alın!' },
+  { id: 'wl-jins-eyewear', name: 'JINS / Zoff 30 Dk Numaralı Gözlük (1.74 Ultra İnce Hoya/Asahi Cam + JINS Switch / PC)', category: 'Optik & Seyahat', store: 'JINS Shinjuku / Shibuya / Kyoto Teramachi / Namba', priceHint: '¥6.600 – ¥13.900 (1.74 Cam Dahil!)', cardId: 'curated-jins-zoff-eyewear', note: 'Eski gözlüğü yanına al; cihazla numarayı kopyalayıp 30 dk da 1.74 ince cam takıyorlar' },
+  { id: 'wl-onitsuka-mexico66sd', name: 'Onitsuka Tiger Mexico 66 SD (Keçi Derisi + OrthoLite Taban) veya Nippon Made', category: 'Ayakkabı & Giyim', store: 'Onitsuka Tiger Ginza / Omotesando / Shibuya / Kyoto / Shinsaibashi', priceHint: '¥18.700 – ¥38.000', cardId: 'curated-footwear-onitsuka-asics', note: 'Standart model yerine kalın yastıklamalı Mexico 66 SD seçin; cm (JP) beden deneyin' },
+  { id: 'wl-asics-walking-insole', name: 'ASICS Walking (Gel-Kayano 14 / Nimbus / Runwalk) & 20.000 Adım Ark Destekli Tabanlık', category: 'Ayakkabı & Giyim', store: 'ASICS Flagship Harajuku / Ginza / Grand Front Osaka & Mizuno Osaka', priceHint: '¥17.600 – ¥22.000 (Tabanlık: ¥2.200)', cardId: 'curated-footwear-onitsuka-asics', note: 'Mağazada ücretsiz 3D Foot ID ayak taraması ve tarak genişliği (2E/4E) ölçümü yaptırın' },
+  { id: 'wl-zojirushi-thermos', name: 'Zojirushi SM-ZB48 / Tiger Ultra-Light Termos (480ml, 170g Tek Tuş Kilitli)', category: 'Ev & Mutfak', store: 'Bic Camera / Yodobashi Camera (Shinjuku / Akihabara / Umeda) & Loft', priceHint: '¥2.400 – ¥3.200', cardId: 'curated-matcha-ceramics-thermos', note: 'Kış gezisinde sıcak çay taşımak için ilk hafta alın; Made in Japan (日本製) serilere bakın' },
+  { id: 'wl-uji-matcha-ippodo', name: 'Uji Seremoniyel Matcha Teneke (Ippodo Sayaka/Ummon, Marukyu Koyamaen veya Tsujiri)', category: 'Çay & Gastronomi', store: 'Uji Byodoin Sokağı (6 Aralık) & Ippodo Kyoto Teramachi Ana Mağaza', priceHint: '¥1.800 – ¥4.500 (40g Teneke)', cardId: 'curated-matcha-ceramics-thermos', note: 'Sadece %100 saf yeşil çay (緑茶); şekerli karışımlarda ゼラチン (jelatin) ve 洋酒/みりん (alkol) kontrolü şart' },
+  { id: 'wl-tokoname-kyusu', name: 'Tokoname-yaki Kyusu Seramik Çay Demliği & Bambu Chasen (Matcha Çırpıcı)', category: 'Ev & Mutfak', store: 'Kyoto Teramachi / Uji Çay Evi / Tokyo Kappabashi', priceHint: '¥3.200 – ¥7.500', cardId: 'curated-matcha-ceramics-thermos', note: 'Dahili ince seramik süzgeçli Tokoname demlik; uçakta kıyafet arasına sarılı taşıyın' },
+  { id: 'wl-anker-3coins-tech', name: 'Anker Japan (Pikachu / GaN Hızlı Şarj & MagGo Powerbank) + 3COINS Kablo/Seyahat Düzenleyici', category: 'Teknoloji & Seyahat', store: 'Yodobashi / Bic Camera / Anker Store Shibuya & 3COINS+plus', priceHint: '¥330 – ¥7.990', cardId: 'fujifilm', note: '100-240V global voltaj uyumlu; Powerbank KESİNLİKLE uçak altı valize konmaz, kabinde taşınır!' }
 ];
 
 function getMergedWishlistItems() {
@@ -2563,7 +2579,7 @@ function renderShopping() {
     <div class="section-header-block">
       <span class="section-eyebrow">Uzman Model, Mağaza, Kişisel Liste &amp; Vergi İadesi Rehberi</span>
       <h2 class="section-title">Alışveriş, Alınacaklar Listem &amp; Kasa Hakemi</h2>
-      <p class="section-subtitle">Kamera, saat, PS5, kırtasiye (Kuru Toga/DelGuard/Sekaido), niş parfüm (Nose Shop/Nile), çocuk giyim (Markey's/Breeze), Kai &amp; Nitori.</p>
+      <p class="section-subtitle">Kamera, saat, PS5, Gömülü Sistemler (Raspberry Pi 5, Arduino, M5Stack, Engineer/Hakko/Hioki), JINS 30 dk gözlük, Onitsuka Tiger, Zojirushi termos, kırtasiye (Sekaido), niş parfüm (Nose Shop) &amp; çocuk giyim.</p>
     </div>
     ${renderQuickYenConverterStrip()}
     <div class="subtab-seg">
@@ -3868,7 +3884,7 @@ function renderLiveTelemetryHubPanel() {
         <button class="filter-pill-btn ${activeTab === 'koyo' ? 'active' : ''}" onclick="switchTelemetryHubTab('koyo')">🍁 Kōyō Gece Işıklandırmaları (10)</button>
         <button class="filter-pill-btn ${activeTab === 'station' ? 'active' : ''}" onclick="switchTelemetryHubTab('station')">🛗 İstasyon Asansör/Çıkış (10)</button>
         <button class="filter-pill-btn ${activeTab === 'masjid' ? 'active' : ''}" onclick="switchTelemetryHubTab('masjid')">🕌 Cami &amp; Mescit Haritası (10)</button>
-        <button class="filter-pill-btn ${activeTab === 'floors' ? 'active' : ''}" onclick="switchTelemetryHubTab('floors')">🏬 Mağaza Kat Planları (10)</button>
+        <button class="filter-pill-btn ${activeTab === 'floors' ? 'active' : ''}" onclick="switchTelemetryHubTab('floors')">🏬 Mağaza Kat Planları (12)</button>
       </div>
 
       ${renderTelemetryFieldTabContent(activeTab)}
@@ -3944,17 +3960,18 @@ function renderGuide() {
             <div style="font-size:0.74rem; font-weight:900; color:var(--sky); text-transform:uppercase; margin-bottom:6px;">🎒 1. KABİN / EL BAGAJI (Uçak İçine Alınması Zorunlular)</div>
             <ul style="font-size:0.81rem; color:var(--text-main); line-height:1.55; padding-left:16px;">
               <li><strong>Fujifilm X-T30 III Gövde &amp; Lensler:</strong> Darbe ve hırsızlığa karşı her zaman sırt çantanızda.</li>
-              <li><strong>Yedek Kamera Pilleri &amp; Powerbank:</strong> Lityum piller uçak altı valize konursa X-ray'de valiz açtırılır!</li>
-              <li><strong>Fiziksel Pasaportlar &amp; QR 812 Biniş Kartı:</strong> Heiwajima Onsen ve Haneda Tax-Free Kiosk için.</li>
-              <li><strong>Değerli Saat (Seiko / Grand Seiko):</strong> Kutusunu valize, saati kolunuza veya el çantanıza alın.</li>
+              <li><strong>M5Stack (Cardputer / CoreS3 / StickC) &amp; LiPo Pilli Kartlar:</strong> İçinde dahili LiPo pil bulunan gömülü sistem kartları, Anker Powerbank ve yedek kamera pilleri KESİNLİKLE kabin bagajında taşınır!</li>
+              <li><strong>Raspberry Pi 5, AI Camera (IMX500) &amp; Hassas Sensörler:</strong> ESD anti-statik poşetinde ve sert plastik koruma kutusunda kabin çantasında.</li>
+              <li><strong>Fiziksel Pasaportlar, JINS Gözlük &amp; Değerli Saat (Seiko / GS):</strong> Heiwajima Onsen ve Haneda Tax-Free Kiosk için.</li>
             </ul>
           </div>
           <div style="background:var(--card-tint); border:2px solid var(--vermilion); border-radius:var(--radius-md); padding:13px;">
             <div style="font-size:0.74rem; font-weight:900; color:var(--vermilion); text-transform:uppercase; margin-bottom:6px;">🧳 2. UÇAK ALTI CHECK-IN VALİZİ (Kabinde El Konulanlar!)</div>
             <ul style="font-size:0.81rem; color:var(--text-main); line-height:1.55; padding-left:16px;">
+              <li><strong>Elektronik El Aletleri (ENGINEER / HAKKO):</strong> Engineer PA-09 konnektör pensesi (crimper), PZ-58 Neji-Saurus vida sökücü pense, NS-04 mikro yan keski, SS-02 alüminyum lehim pompası ve Hakko T18 metal havya uçları KESİNLİKLE uçak altı valize konmalıdır!</li>
               <li><strong>Kesici Aletler:</strong> Nitori / Kappabashi mutfak bıçakları, <strong>Kai tırnak makası</strong>, Kokuyo HAKO-AKE ve katlanır makaslar!</li>
-              <li><strong>Mühürlü Tax-Free Poşetleri (100ml+ Sıvılar):</strong> Ainz &amp; Tulpe kremler, güneş kremleri, şampuanlar, NOSE SHOP / Nile / SHIRO parfümler, Daiso Glue Away.</li>
-              <li><strong>Vakumlu Poşetlerle Sıkıştırılmış Kıyafetler:</strong> 3COINS/Daiso vakum poşetiyle küçültülmüş Uniqlo kışlıklar ve Markey's/Breeze çocuk kıyafetleri.</li>
+              <li><strong>Mühürlü Tax-Free Poşetleri (100ml+ Sıvılar):</strong> Ainz &amp; Tulpe kremler, güneş kremleri, şampuanlar, NOSE SHOP / Nile / SHIRO parfümler, Daiso Glue Away, Uji Matcha tenekeleri.</li>
+              <li><strong>Vakumlu Poşetlerle Sıkıştırılmış Kıyafetler &amp; Termos:</strong> 3COINS/Daiso vakum poşetiyle küçültülmüş Uniqlo kışlıklar, Onitsuka Tiger ayakkabılar ve boş Zojirushi termos.</li>
             </ul>
           </div>
         </div>
@@ -6003,6 +6020,11 @@ function normalizeOmniText(str) {
     .replace(/â/g, 'a')
     .replace(/î/g, 'i')
     .replace(/û/g, 'u')
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[ōô]/g, 'o')
+    .replace(/[ū]/g, 'u')
+    .replace(/[ā]/g, 'a')
+    .replace(/[ī]/g, 'i')
     .replace(/[\.,\/#!$%\^&\*;:{}=\-_'~`()'"?]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -6714,6 +6736,12 @@ function updateOmniView() {
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kawaguchiko Otobüs')">🚌 Fuji Otobüsü</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Helal Ramen')">🍜 Helal Ramen</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Otomat İçecekleri')">🥤 Otomat</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Raspberry Pi 5 M5Stack Arduino ESP32')">🔌 Raspberry Pi &amp; M5Stack</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Engineer SS-02 PA-09 Hakko Hioki')">🔧 Engineer &amp; Hakko Alet</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('JINS Zoff 30 Dakika Gözlük')">👓 JINS 30 Dk Gözlük</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Onitsuka Tiger Mexico 66 SD ASICS')">👟 Onitsuka &amp; ASICS</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Zojirushi Termos Uji Matcha Ippodo')">🍵 Zojirushi &amp; Matcha</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('UPCAFE Souffle Pancake Dango Mochi')">🥞 Helal Pankek &amp; Tatlı</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kırtasiye Kuru Toga DelGuard')">✏️ Kırtasiye &amp; Kalem</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Niş Parfüm Dirty Rice Nile')">🌸 Niş Parfümler</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Çocuk Giyim Markey Breeze')">👶 Çocuk Giyim</button>
