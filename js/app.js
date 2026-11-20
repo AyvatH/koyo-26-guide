@@ -28,7 +28,11 @@ let currentSwapCtx = null;
 let currentBudgetFilter = 'Tümü';
 let currentBudgetEntryFilter = 'all'; // 'all' | 'actual' | 'estimate' | 'transfer'
 let currentHalalSubtab = 'markets'; // 'markets' | 'basket' | 'phrases' | 'radar'
-let currentShopSubtab = 'catalog';  // 'catalog' | 'taxfree'
+let currentShopSubtab = 'catalog';  // 'catalog' | 'wishlist' | 'taxfree'
+let currentShopSearch = '';
+let currentShopStatusFilter = 'all'; // 'all' | 'pending' | 'bought'
+let currentWishlistFilter = 'Tümü';
+let quickFxInputJPY = 3800;
 let currentGuideSubtab = 'tips';    // 'tips' | 'checklist' | 'tools'
 let currentCrisisMode = 'rain';     // 'rain' | 'tired' | 'hungry' | 'late' | 'train'
 let openShoppingCards = {};
@@ -48,9 +52,12 @@ let appState = {
   basketChecks: {},
   shopInspections: {},
   shopPurchased: {},
+  personalWishlist: {},
+  customWishlist: [],
   storeQuotes: {},
   icBalances: { hasan: 3000, es: 3000, cashJPY: 35000 },
   fxRate: 150,
+  tryPerUsd: 36.5,
   notes: {},
   expenses: [],
   darkMode: false,
@@ -161,11 +168,14 @@ function loadMasterState() {
       appState = Object.assign(appState, parsed);
       if (!appState.shopInspections) appState.shopInspections = {};
       if (!appState.shopPurchased) appState.shopPurchased = {};
+      if (!appState.personalWishlist) appState.personalWishlist = {};
+      if (!Array.isArray(appState.customWishlist)) appState.customWishlist = [];
       if (!appState.dayPlans) appState.dayPlans = {};
       if (!appState.prepBookings) appState.prepBookings = {};
       if (!appState.basketChecks) appState.basketChecks = {};
       if (!appState.storeQuotes) appState.storeQuotes = {};
       if (!appState.fxRate || appState.fxRate < 80 || appState.fxRate > 250) appState.fxRate = 150;
+      if (!appState.tryPerUsd || appState.tryPerUsd < 10 || appState.tryPerUsd > 150) appState.tryPerUsd = 36.5;
       if (!appState.icBalances) appState.icBalances = { hasan: 3000, es: 3000, cashJPY: 35000 };
       if (!appState.mapProvider) appState.mapProvider = 'google';
     }
@@ -175,6 +185,26 @@ function loadMasterState() {
 function getFxRate() {
   const r = Number(appState.fxRate);
   return Number.isFinite(r) && r >= 80 && r <= 250 ? r : 150;
+}
+
+function getTryPerUsd() {
+  const r = Number(appState.tryPerUsd);
+  return Number.isFinite(r) && r >= 10 && r <= 150 ? r : 36.5;
+}
+
+function computeYenBreakdown(jpyRaw) {
+  const jpy = Math.max(0, Number(jpyRaw) || 0);
+  const fx = getFxRate();
+  const tryUsd = getTryPerUsd();
+  const usd = jpy / fx;
+  const tryVal = usd * tryUsd;
+  const isTaxFree = jpy >= 5500;
+  const netJpy = isTaxFree ? Math.round(jpy / 1.1) : jpy;
+  const refundJpy = jpy - netJpy;
+  const netUsd = netJpy / fx;
+  const netTry = netUsd * tryUsd;
+  const shortForTaxFree = isTaxFree ? 0 : (5500 - jpy);
+  return { jpy, usd, tryVal, isTaxFree, netJpy, refundJpy, netUsd, netTry, shortForTaxFree };
 }
 
 function saveMasterState() {
@@ -731,6 +761,195 @@ function parseFirstYenNumber(str) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
+const DAY_LOOP_INFOGRAPHICS = {
+  "day-4": {
+    title: "Lake Kawaguchiko (Mt. Fuji) — 1-Günlük Tam Döngü (1-Day Loop)",
+    subtitle: "25/11 Çarşamba • Alınmış Otobüs (Bus 1305 & 1306) + Göl Çevresi Red Line Rotası",
+    badge: "🗻 FUJI & GÖL DÖNGÜSÜ",
+    steps: [
+      { num: 1, title: "Busta Shinjuku → Kawaguchiko", desc: "08:45 Kalkış (Bus 1305 • Koltuk 10C/10D) → 10:37 Varış", stopId: "day-4-s0" },
+      { num: 2, title: "Chureito Pagoda (Shimoyoshida)", desc: "5 katlı kızıl pagoda + Fuji Dağı ikonik kartpostal manzarası", stopId: "day-4-s1" },
+      { num: 3, title: "Oishi Park & Momiji Koridoru", desc: "Çiçek tarlaları, göl kıyısı Fuji kadrajı ve sonbahar akçaağaç tüneli", stopId: "day-4-s2" },
+      { num: 4, title: "Panoramik Ropeway / Göl Teknesi & Helal Öğle", desc: "Fujiyama Camii Helal Ev Yemeği + Göl kıyısı yürüyüşü", stopId: "day-4-s3" },
+      { num: 5, title: "Kawaguchiko → Shinjuku Dönüş", desc: "17:20 Kalkış (Bus 1306 • Koltuk 03C/03D) → 19:05 Shinjuku", stopId: "day-4-s4" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Shinjuku ↔ Kawaguchiko)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        <div style="margin-bottom:6px; padding-bottom:6px; border-bottom:1px dashed var(--border-subtle);">
+          <strong style="color:var(--matcha);">🚌 Highway Bus (BİZİM BİLETİMİZ — ALINDI):</strong><br>
+          • Süre: ~1s 52dk • Ücret: <strong>¥2.200 / kişi</strong> (Online alındı #3512551)<br>
+          • Gidiş 08:45 (10C/10D) | Dönüş 17:20 (03C/03D) • Aktarmasız koltuklu
+        </div>
+        <div>
+          <strong style="color:var(--indigo);">🚆 VEYA Fuji Excursion Limited Express Treni:</strong><br>
+          • Süre: ~2 saat • Ücret: <strong>~¥4.130–4.200 / tek yön</strong> (Günde ~4 tren)
+        </div>
+      </div>
+    `,
+    aroundTitle: "🚌 AROUND THE LAKE (Göl Çevresi Ulaşım)",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        <strong style="color:var(--vermilion);">Retro / Omni Sightseeing Bus (Red Line):</strong><br>
+        • <strong>1-Day Pass: ¥1.500</strong> veya doğrudan <strong>Suica / IC Kart</strong> bas-geç<br>
+        • Kırmızı Hat (Red Line) her <strong>~15 dakikada bir</strong> geçer<br>
+        • Durak #1 Kawaguchiko St. → Teleferik (#11) → Momiji (#19) → Oishi Park (#22)
+      </div>
+    `,
+    tip: "🍁 Fuji manzarası sabah saatlerinde en nettir; Kasım sonu sonbahar yaprakları (Momiji) zirvededir. 17:20 dönüş otobüsünü kaçırmamak için Oishi Park'tan en geç 16:15 Red Line otobüsüne binin!"
+  },
+  "day-5": {
+    title: "Asakusa Senso-ji, Ueno & Rikugien Gece Işıkları — 1-Day Loop",
+    subtitle: "26/11 Perşembe • Geleneksel Tokyo Tapınağı → Müze/Park → Gece Kōyō Işıklandırması",
+    badge: "🏮 GELENEKSEL TOKYO LOOP",
+    steps: [
+      { num: 1, title: "Asakusa Senso-ji & Kaminarimon", desc: "Sabah erken dev kırmızı fener, Nakamise çarşısı ve tütsü avlusu", stopId: "day-5-s0" },
+      { num: 2, title: "Kappabashi & Helal Wagyu / Ramen", desc: "Japon şef bıçağı sokağı + Asakusa sertifikalı helal öğle molası", stopId: "day-5-s1" },
+      { num: 3, title: "Ueno Parkı & Ameyoko Çarşısı", desc: "Altın ginkgo ağaçları, gölet çevresi ve canlı açık hava pazarı", stopId: "day-5-s2" },
+      { num: 4, title: "Rikugien Bahçesi Gece Işıklandırması", desc: "Akşam su yüzeyine yansıyan ışıklandırılmış kızıl akçaağaçlar", stopId: "day-5-s3" }
+    ],
+    gettingThereTitle: "🚇 GETTING THERE (Shinjuku / Takadanobaba → Asakusa)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Tokyo Metro Ginza Line:</strong> Asakusa ↔ Ueno arası sadece <strong>5 dk (¥180)</strong><br>
+        • <strong>JR Yamanote Line:</strong> Ueno → Komagome (Rikugien) <strong>7 dk (¥170)</strong>
+      </div>
+    `,
+    aroundTitle: "🎫 AROUND THE LOOP (Ulaşım & Bilet İpucu)",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Tokyo Subway 24-Hour Ticket (¥800)</strong> veya <strong>Suica IC Kart</strong><br>
+        • Rikugien akşam ışıklandırmasında tripod yasaktır; korkuluk destekli OIS ile çekim yapın.
+      </div>
+    `,
+    tip: "🍁 Senso-ji Tapınağı'nda saat 09:00'dan önce fotoğraf çekmek kalabalığı %70 azaltır; Kappabashi'den alınan bıçaklar uçak altı valize konmalıdır."
+  },
+  "day-13": {
+    title: "Arashiyama Bambu Ormanı & Sagano Romantik Tren — 1-Day Loop",
+    subtitle: "04/12 Cuma • Bambu Korusu → Tenryu-ji → 12:02 Sagano #7 (Alındı) → Togetsukyo",
+    badge: "🎋 ARASHIYAMA & SAGANO LOOP",
+    steps: [
+      { num: 1, title: "Arashiyama Bambu Ormanı", desc: "Sabah erken ışıkta dev yeşil bambu koridoru yürüyüşü", stopId: "day-13-s0" },
+      { num: 2, title: "Tenryu-ji Zen Tapınağı & Göleti", desc: "Bambu çıkışından doğrudan kuzey kapısıyla Sogenchi Zen bahçesi", stopId: "day-13-s1" },
+      { num: 3, title: "12:02 Sagano Romantic Train #7", desc: "ALINDI (Vagon 1 • Koltuk 7A/7B) • Torokko Saga → Kameoka kanyonu", stopId: "day-13-s2" },
+      { num: 4, title: "JR Umahori → Togetsukyo & Helal Öğle", desc: "Kameoka'dan 10 dk yürüyüşle JR Umahori'den 8 dakikada Arashiyama'ya dönüş", stopId: "day-13-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Kyoto Merkez → Arashiyama)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>JR Sagano (San-in) Line:</strong> Kyoto St. → Saga-Arashiyama (<strong>~17 dk • ¥240</strong>)<br>
+        • <strong>Sagano Scenic Railway #7:</strong> 12:02 Kalkış (Bilet alındı • QR Cüzdanım'da)
+      </div>
+    `,
+    aroundTitle: "🔄 LOOP RETURN TRICK (Kameoka → Arashiyama)",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Romantik tren 12:25'te Torokko Kameoka'da biter.<br>
+        • Tarlaların içinden <strong>JR Umahori İstasyonu'na 10 dk yürüyün</strong> ve JR trenle <strong>8 dakikada (¥200)</strong> Arashiyama'ya geri dönün!
+      </div>
+    `,
+    tip: "🍁 12:02 Sagano #7 treni dakika şaşmaz! En geç 11:45'te Torokko Saga peronunda hazır olun."
+  },
+  "day-16": {
+    title: "Uji Matcha, Aoniyoshi Treni & Nara Geyik Parkı / Todai-ji — 1-Day Loop",
+    subtitle: "07/12 Pazartesi • Sabah Uji Matcha → 14:55 Aoniyoshi (Alındı) → Todai-ji (17:00 Kapanış!)",
+    badge: "🦌 UJI & NARA KRİTİK LOOP",
+    steps: [
+      { num: 1, title: "Uji Byodoin & Matcha Sokağı", desc: "10 Yen üzerindeki Phoenix Hall tapınağı ve taze seremoniyel matcha alımı", stopId: "day-16-s0" },
+      { num: 2, title: "14:55 Kintetsu Aoniyoshi Panoramik Tren", desc: "ALINDI (Vagon 4 • Salon Koltuk 2A/2B) • Kyoto → Kintetsu-Nara (15:28)", stopId: "day-16-s1" },
+      { num: 3, title: "ÖNCE Todai-ji Dev Buda (17:00 Kapanış!)", desc: "Trenden iner inmez geyiklerle oyalanmadan doğrudan Todai-ji'ye yürüyün!", stopId: "day-16-s2" },
+      { num: 4, title: "Nara Parkı Geyikleri & Kasuga Yolu", desc: "Tapınak çıkışında geyik krakeri (¥200 nakit) ve taş fenerler", stopId: "day-16-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Kyoto → Uji → Nara)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Sabah JR奈良 Line:</strong> Kyoto → Uji (~20 dk • ¥240)<br>
+        • <strong>14:55 Kintetsu Aoniyoshi:</strong> Kyoto → Kintetsu-Nara (<strong>33 dk</strong> • Turnikede IC Kart ¥760 + Alınmış Ek Bilet)
+      </div>
+    `,
+    aroundTitle: "🦌 AROUND NARA (Geyik & Kapanış Taktikleri)",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Kintetsu-Nara → Todai-ji yürüyerek <strong>15–18 dk</strong> (veya otobüsle 5 dk)<br>
+        • Geyik krakeri (Shika-senbei) tezgahları sadece <strong>¥200 nakit</strong> kabul eder.
+      </div>
+    `,
+    tip: "⚠️ HAYATİ SAAT KURALI: Aoniyoshi 15:28'de Nara'ya varır ve Todai-ji 17:00'de (son giriş 16:30) kapanır! İner inmez ÖNCE Todai-ji'ye girin, geyikleri çıkışta besleyin."
+  }
+};
+
+function renderDayLoopInfographic(day, index) {
+  if (!day) return '';
+  const preset = DAY_LOOP_INFOGRAPHICS[day.id];
+  const steps = preset
+    ? preset.steps
+    : (day.stops || []).slice(0, 4).map((s, idx) => ({
+        num: idx + 1,
+        title: s.name.split('(')[0].trim(),
+        desc: `${s.time} • ${(s.duration || '').substring(0, 42)}`,
+        stopId: s.stopId || `${day.id}-s${idx}`
+      }));
+
+  const title = preset ? preset.title : `${day.city.split('->').pop().trim()} — Gün ${index + 1} Rota Döngüsü (1-Day Loop)`;
+  const subtitle = preset ? preset.subtitle : `${formatDayMonth(day.date, '/')} ${formatWeekdayLabel(day.date, true)} • ${day.title}`;
+  const badge = preset ? preset.badge : `🗺️ GÜN ${index + 1} LOOP`;
+  const gettingThereTitle = preset ? preset.gettingThereTitle : '🚆 GETTING THERE (Ana Ulaşım & Kart)';
+  const gettingThereHtml = preset
+    ? preset.gettingThereHtml
+    : `<div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+         <strong>${day.passDecision ? day.passDecision.name : 'IC Kart (Suica / ICOCA)'}:</strong> ${day.passDecision ? day.passDecision.coverage : day.city}<br>
+         • Maliyet: <strong>${day.passDecision ? day.passDecision.costPerPerson : 'Standart biniş'}</strong> (${day.passDecision ? day.passDecision.totalCost : ''})
+       </div>`;
+  const aroundTitle = preset ? preset.aroundTitle : '🧭 AROUND THE AREA (Gün İçi Akış & Bütçe)';
+  const aroundHtml = preset
+    ? preset.aroundHtml
+    : `<div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+         • <strong>Başlangıç:</strong> ${day.wakeUp || '08:30'}<br>
+         • <strong>Günlük Tahmini Bütçe (2 Kişi):</strong> ${day.dailyBudgetEstimated ? day.dailyBudgetEstimated.total : '—'}
+       </div>`;
+  const tip = preset ? preset.tip : `💡 ${day.passDecision ? day.passDecision.instructions : 'Numaralı kutulara dokunarak doğrudan o durağın harita ve detay kartına inebilirsiniz.'}`;
+
+  return `
+    <div class="loop-infographic-card">
+      <div class="loop-header-banner">
+        <div>
+          <span class="hero-badge" style="background:var(--vermilion); color:#fff; font-size:0.68rem; margin-bottom:4px; display:inline-block;">${badge}</span>
+          <h3 class="loop-title-main">${title}</h3>
+          <span class="loop-subtitle-tag">${subtitle}</span>
+        </div>
+        <span style="font-size:0.72rem; font-weight:800; color:var(--text-muted); background:var(--bg-surface); padding:4px 9px; border-radius:999px; border:1px solid var(--border-subtle);">Dokun → Durağa İn</span>
+      </div>
+
+      <div class="loop-steps-track">
+        ${steps.map(st => `
+          <div class="loop-step-node" onclick="scrollToStop('${st.stopId}')">
+            <div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;">
+              <span class="loop-step-num">${st.num}</span>
+              <strong style="font-size:0.84rem; color:var(--text-main); line-height:1.22;">${st.title}</strong>
+            </div>
+            <div style="font-size:0.74rem; color:var(--text-secondary); line-height:1.38;">${st.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="loop-transit-grid">
+        <div class="loop-transit-box getting-there">
+          <div class="loop-box-heading" style="color:var(--indigo);">${gettingThereTitle}</div>
+          ${gettingThereHtml}
+        </div>
+        <div class="loop-transit-box around-area">
+          <div class="loop-box-heading" style="color:var(--vermilion);">${aroundTitle}</div>
+          ${aroundHtml}
+        </div>
+      </div>
+
+      <div class="loop-tip-ribbon">
+        <span>${tip}</span>
+      </div>
+    </div>
+  `;
+}
+
 // TAB 1: MASTER EDITORIAL DAY RENDER (2-Col on Desktop, Airy Stack on iPhone)
 function renderDay(index) {
   const day = itineraryData[index];
@@ -1085,6 +1304,7 @@ function renderDay(index) {
       <!-- SAĞ KOLON (Zaman Çizelgesi + Yemek Seçici + Notlar) -->
       <div class="day-main-col">
         ${modeAlertsHtml}
+        ${renderDayLoopInfographic(day, index)}
 
         <div class="short-flow-box">
           <div class="short-flow-header">
@@ -1266,6 +1486,22 @@ function scrollToStop(sid) {
   const card = document.getElementById(`card-${sid}`);
   if (card && !card.classList.contains('open')) toggleStopDrawer(sid);
   if (node && node.scrollIntoView) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (card && card.classList) {
+    card.classList.add('omni-highlight-pulse');
+    setTimeout(() => card.classList.remove('omni-highlight-pulse'), 2200);
+  }
+}
+
+function jumpToStopFromSearch(dayIdx, stopId) {
+  closeAiAssistantModal();
+  clearGlobalSearch();
+  switchTab('itinerary');
+  selectDay(Number(dayIdx) || 0);
+  if (stopId) {
+    setTimeout(() => {
+      scrollToStop(stopId);
+    }, 90);
+  }
 }
 
 function toggleStopDone(sid) {
@@ -1751,24 +1987,308 @@ function showComposedPhrase() {
 }
 
 // ==========================================================================
-// TAB 3: SHOPPING CATALOG (INTERACTIVE CHECKLISTS) & KASA HAKEMİ
+// TAB 3: SHOPPING CATALOG, PERSONAL WISHLIST & KASA HAKEMİ
 // ==========================================================================
+
+const EMBEDDED_PERSONAL_WISHLIST = [
+  { id: 'wl-vakum', name: 'Vakumlu Valiz Poşeti & El Tipi Vakum Pompası', category: 'Ev & Seyahat', store: '3COINS / Daiso / Nitori / Donki', priceHint: '¥330 – ¥1.100', cardId: 'curated-home-lifestyle-kai', note: 'Mont ve kazakları 3 kat sıkıştırmak için' },
+  { id: 'wl-kai', name: 'Kai Marka Tırnak Makası (Seki Magoroku Type 101 / 001)', category: 'Ev & Bakım', store: 'Bic Camera / Hands / Loft / Donki', priceHint: '¥700 – ¥1.600', cardId: 'curated-home-lifestyle-kai', note: 'Hazneli keskin çelik (Uçak altı valize!)' },
+  { id: 'wl-nitori', name: 'Nitori Paslanmaz Santoku Bıçak, Kaliteli Kepçe & Sarımsak Ezici', category: 'Ev & Mutfak', store: 'Nitori Shinjuku/Ginza & MUJI', priceHint: '¥1.290 – ¥2.500', cardId: 'curated-home-lifestyle-kai', note: 'Bıçak kesinlikle uçak altı valize konmalı' },
+  { id: 'wl-towel-wpc', name: 'İnce Seyahat Havlusu (Muji) & Wpc. 76g Ultra Hafif Şemsiye', category: 'Ev & Seyahat', store: 'MUJI & Loft / Hands', priceHint: '¥1.200 – ¥3.500', cardId: 'curated-home-lifestyle-kai', note: 'Karbon telli rüzgâr kırmaz şemsiye' },
+  { id: 'wl-binocular', name: 'Kompakt Cep Dürbünü (Vixen / Nikon Aculon 8x21)', category: 'Optik & Seyahat', store: 'Bic Camera / Yodobashi Shinjuku', priceHint: '¥6.500 – ¥11.000', cardId: 'curated-home-lifestyle-kai', note: 'Fuji ve tapınak detayları için hafif dürbün' },
+  { id: 'wl-kurutoga', name: 'Uni Kuru Toga (Advance/Roulette) & Jetstream / EnerGel Kalemler', category: 'Kırtasiye', store: 'Sekaido Shinjuku (En Ucuz) / Loft / Hands', priceHint: '¥200 – ¥1.200', cardId: 'curated-stationery-master', note: 'Yazarken ucu otomatik dönen mekanizma' },
+  { id: 'wl-delguard', name: 'Zebra DelGuard (Ucu Kırmayan Kalem) & Mildliner Pastel Fosforlu', category: 'Kırtasiye', store: 'Sekaido Shinjuku / Loft / Seria', priceHint: '¥150 – ¥750', cardId: 'curated-stationery-master', note: 'Çift yaylı uç kırmaz mekanizma' },
+  { id: 'wl-notebooks', name: 'Midori MD Notebook, Kokuyo Soft Ring & Campus Flat Defter', category: 'Kırtasiye', store: 'Sekaido Shinjuku / G.Itoya / Loft', priceHint: '¥400 – ¥1.500', cardId: 'curated-stationery-master', note: 'Yumuşak silikon telli ve 180° düz açılan defterler' },
+  { id: 'wl-stat-tools', name: 'Kokuyo Dotliner, Harinacs (Telsiz Zımba), HAKO-AKE, Mono Silgi & Daiso Glue Away', category: 'Kırtasiye', store: 'Sekaido / Loft & Daiso (Glue Away)', priceHint: '¥110 – ¥850', cardId: 'curated-stationery-master', note: 'Makaslı HAKO-AKE uçak altı valize!' },
+  { id: 'wl-dirtyrice', name: 'BORNTOSTANDOUT Dirty Rice / MITH Golden Rice / Dannam White Rice', category: 'Parfüm', store: 'NOSE SHOP (Shinjuku NEWoMan 2F / Shibuya / Ginza)', priceHint: '¥8.500 – ¥26.000', cardId: 'curated-niche-perfume', note: 'Basmati pirinci, badem sütü ve sandal ağacı' },
+  { id: 'wl-teaperfume', name: 'To Summer (Triple Tea / Osmanthus), Matthew Chang & Dosigoh Sesame Shower', category: 'Parfüm', store: 'NOSE SHOP / Ginza Six', priceHint: '¥12.000 – ¥28.000', cardId: 'curated-niche-perfume', note: 'Asya çay, incir ve kavrulmuş susam notaları' },
+  { id: 'wl-nile-shiro', name: 'Nile (Bachelor / Green Tea / Savon Cachemire) & SHIRO Savon Parfüm', category: 'Parfüm', store: 'SHIRO Butik (Shinjuku/Ginza) & Loft', priceHint: '¥2.500 – ¥4.500', cardId: 'curated-niche-perfume', note: 'Tertemiz Japon sabunu ve yeşil çay kokusu' },
+  { id: 'wl-markeys', name: "Markey's & Breeze Çocuk Kıyafetleri (Japon Mini Rodini Tarzı)", category: 'Çocuk Giyim', store: 'Lalaport Toyosu / DiverCity Odaiba / Parco', priceHint: '¥1.500 – ¥3.800', cardId: 'curated-kids-apparel', note: 'Çocuğun cm boyundan 1 beden büyük alın' },
+  { id: 'wl-birthday-miki', name: 'Birthday (Uygun Fiyatlı Çocuk), Beams Mini (Trenli) & Miki House Ayakkabı', category: 'Çocuk Giyim', store: 'Lalaport Toyosu & Shinjuku Takashimaya 9F', priceHint: '¥600 – ¥15.000', cardId: 'curated-kids-apparel', note: 'Miki House ilk adım ortopedik ayakkabı' },
+  { id: 'wl-sofy-tabio', name: 'Sofy Hada Omoi (%100 Organik Pamuk Ped), Tabio Çorap & Muji Pijama', category: 'Kozmetik & Giyim', store: 'Ainz & Tulpe + Tabio (Kutsushitaya) + MUJI', priceHint: '¥400 – ¥4.900', cardId: 'curated-quiet-drugstores-cosmetics', note: 'Atsugi kaçmayan ince kadın çorabı dahil' },
+  { id: 'wl-skincare-calm', name: 'Curel Nemlendirici, Canmake Mermaid Tinted UV, Sana Göz Kremi & Melty Lip', category: 'Kozmetik & Bakım', store: '1. Ainz & Tulpe (Sakin) / 2. Sun Drug (Ucuz)', priceHint: '¥600 – ¥2.500', cardId: 'curated-quiet-drugstores-cosmetics', note: 'Cow Brand Bouncia köpük duş jeli & &honey şampuan' },
+  { id: 'wl-medals', name: 'Hatıra Madalyonları (Kinen Medaru: Tokyo Gov 45F, Fuji 5th, Osaka Kalesi)', category: 'Hatıra & Koleksiyon', store: 'Tokyo Gov 45F • Mt. Fuji 5th • Osaka Castle', priceHint: '¥600 – ¥900 (+¥50 Tarih/İsim Kazıma)', cardId: 'curated-souvenir-medal-coins', note: 'Yanınızda ¥100 ve ¥10 madeni para bulundurun' }
+];
+
+function getMergedWishlistItems() {
+  const base = EMBEDDED_PERSONAL_WISHLIST.map(item => {
+    const st = (appState.personalWishlist && appState.personalWishlist[item.id]) || {};
+    return {
+      ...item,
+      checked: !!st.checked,
+      qty: st.qty || 1,
+      customNote: st.note !== undefined ? st.note : item.note,
+      isCustom: false
+    };
+  });
+  const custom = (appState.customWishlist || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    category: c.category || 'Özel Eklenen',
+    store: c.store || 'Japonya Genel',
+    priceHint: c.estJPY ? `~¥${Number(c.estJPY).toLocaleString()}` : '—',
+    cardId: c.cardId || '',
+    customNote: c.note || '',
+    checked: !!c.checked,
+    qty: c.qty || 1,
+    isCustom: true
+  }));
+  return [...custom, ...base];
+}
+
+function toggleWishlistItem(id, isCustom) {
+  if (isCustom) {
+    const target = (appState.customWishlist || []).find(x => x.id === id);
+    if (target) target.checked = !target.checked;
+  } else {
+    if (!appState.personalWishlist) appState.personalWishlist = {};
+    const cur = appState.personalWishlist[id] || { checked: false, qty: 1 };
+    appState.personalWishlist[id] = { ...cur, checked: !cur.checked };
+  }
+  saveMasterState();
+  renderShopping();
+}
+
+function changeWishlistQty(id, delta, isCustom) {
+  if (isCustom) {
+    const target = (appState.customWishlist || []).find(x => x.id === id);
+    if (target) target.qty = Math.max(1, (Number(target.qty) || 1) + delta);
+  } else {
+    if (!appState.personalWishlist) appState.personalWishlist = {};
+    const cur = appState.personalWishlist[id] || { checked: false, qty: 1 };
+    appState.personalWishlist[id] = { ...cur, qty: Math.max(1, (Number(cur.qty) || 1) + delta) };
+  }
+  saveMasterState();
+  renderShopping();
+}
+
+function addCustomWishlistItem() {
+  const nameEl = document.getElementById('cw-name');
+  const catEl = document.getElementById('cw-cat');
+  const storeEl = document.getElementById('cw-store');
+  const priceEl = document.getElementById('cw-price');
+  const noteEl = document.getElementById('cw-note');
+  const name = (nameEl ? nameEl.value : '').trim();
+  if (!name) {
+    showToast('Lütfen eklenecek ürün adını yazın');
+    return;
+  }
+  if (!Array.isArray(appState.customWishlist)) appState.customWishlist = [];
+  appState.customWishlist.unshift({
+    id: 'cw-' + Date.now(),
+    name,
+    category: catEl ? catEl.value : 'Özel Eklenen',
+    store: (storeEl ? storeEl.value : '').trim() || 'Tokyo / Kyoto / Osaka',
+    estJPY: Number(priceEl ? priceEl.value : 0) || 0,
+    note: (noteEl ? noteEl.value : '').trim(),
+    qty: 1,
+    checked: false
+  });
+  saveMasterState();
+  renderShopping();
+  showToast(`"${name}" alınacaklar listenize eklendi!`);
+}
+
+function deleteCustomWishlistItem(id) {
+  if (!Array.isArray(appState.customWishlist)) return;
+  appState.customWishlist = appState.customWishlist.filter(x => x.id !== id);
+  saveMasterState();
+  renderShopping();
+  showToast('Ürün listeden silindi');
+}
+
+function renderQuickYenConverterStrip() {
+  const b = computeYenBreakdown(quickFxInputJPY);
+  return `
+    <div class="quick-fx-strip">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+        <div>
+          <span class="section-eyebrow" style="color:var(--sky); margin-bottom:2px;">💴 Canlı Etiket &amp; Tax-Free Hesaplayıcı (¥ ↔ $ / ₺)</span>
+          <div style="font-size:0.78rem; color:var(--text-secondary);">Mağazada gördüğünüz ¥ etiketini yazın; Dolar, TL ve Tax-Free net maliyetini anında görün:</div>
+        </div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap;">
+          ${[1000, 2500, 3800, 5500, 12000, 25000].map(p => `
+            <button class="action-chip" style="min-height:28px; padding:2px 8px; font-size:0.74rem;" onclick="updateQuickFxInput(${p})">¥${p.toLocaleString()}</button>
+          `).join('')}
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:minmax(130px, 180px) 1fr auto; gap:10px; align-items:center;">
+        <input type="number" id="quick-fx-jpy-input" class="search-input tabular" style="padding:8px 12px; font-weight:800; font-size:1rem;" value="${b.jpy}" placeholder="Etiket ¥" oninput="updateQuickFxInput(this.value, true)">
+        <div id="quick-fx-live-readout" style="font-size:0.83rem; line-height:1.45;">
+          ${buildQuickFxReadoutHtml(b)}
+        </div>
+        <button class="action-chip map-route" onclick="logDayAmountToBudget('Mağaza Alışverişi (Hızlı Kur)', 'Alışveriş & Teknoloji & Saat (Hediyelik Dahil)', quickFxInputJPY, { entryType: 'actual' })">
+          ${ico('plus')} <span>Bütçeye İşle</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function buildQuickFxReadoutHtml(b) {
+  if (b.isTaxFree) {
+    return `
+      <div><strong>Etiket: ¥${b.jpy.toLocaleString()}</strong> = <strong style="color:var(--sky);">$${b.usd.toFixed(2)} USD</strong> • <strong style="color:var(--indigo);">~₺${Math.round(b.tryVal).toLocaleString()} TL</strong></div>
+      <div style="color:var(--matcha); font-weight:700; font-size:0.78rem;">✅ TAX-FREE UYGUN (¥5.500+): İade +¥${b.refundJpy.toLocaleString()} → <strong>Net: ¥${b.netJpy.toLocaleString()} ($${b.netUsd.toFixed(2)} / ~₺${Math.round(b.netTry).toLocaleString()})</strong></div>
+    `;
+  }
+  return `
+    <div><strong>Etiket: ¥${b.jpy.toLocaleString()}</strong> = <strong style="color:var(--sky);">$${b.usd.toFixed(2)} USD</strong> • <strong style="color:var(--indigo);">~₺${Math.round(b.tryVal).toLocaleString()} TL</strong></div>
+    <div style="color:var(--text-muted); font-size:0.76rem;">ℹ️ Tax-Free (¥5.500) için aynı mağazada sepete <strong>¥${b.shortForTaxFree.toLocaleString()} (~$${(b.shortForTaxFree / getFxRate()).toFixed(1)})</strong> daha ekleyin.</div>
+  `;
+}
+
+function updateQuickFxInput(val, fromInput = false) {
+  quickFxInputJPY = Math.max(0, Number(val) || 0);
+  if (!fromInput) {
+    const inp = document.getElementById('quick-fx-jpy-input');
+    if (inp) inp.value = quickFxInputJPY;
+  }
+  const readout = document.getElementById('quick-fx-live-readout');
+  if (readout) {
+    readout.innerHTML = buildQuickFxReadoutHtml(computeYenBreakdown(quickFxInputJPY));
+  }
+}
+
+function handleShopCatalogSearch(val) {
+  currentShopSearch = String(val || '');
+  renderShopping();
+  const el = document.getElementById('shop-catalog-search');
+  if (el) {
+    el.focus();
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+  }
+}
+
+function setShopStatusFilter(status) {
+  currentShopStatusFilter = status;
+  renderShopping();
+}
+
+function setWishlistCategoryFilter(cat) {
+  currentWishlistFilter = cat;
+  renderShopping();
+}
+
+function jumpToShoppingCard(cardId) {
+  closeAiAssistantModal();
+  clearGlobalSearch();
+  currentShopSubtab = 'catalog';
+  currentShopCategory = 'Tümü';
+  currentShopHubOnly = false;
+  currentShopSearch = '';
+  currentShopStatusFilter = 'all';
+  if (cardId) openShoppingCards[cardId] = true;
+  switchTab('shopping');
+  renderShopping();
+  if (cardId) {
+    setTimeout(() => {
+      const el = document.getElementById(`shop-card-${cardId}`);
+      if (el) {
+        if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (el.classList) {
+          el.classList.add('omni-highlight-pulse');
+          setTimeout(() => el.classList.remove('omni-highlight-pulse'), 2400);
+        }
+      }
+    }, 90);
+  }
+}
 
 function renderShopping() {
   const container = document.getElementById('shopping-list-container');
   if (!container) return;
 
+  const allWish = getMergedWishlistItems();
+  const doneWishCount = allWish.filter(x => x.checked).length;
+
   const subBarHtml = `
     <div class="section-header-block">
-      <span class="section-eyebrow">Uzman Model, Mağaza &amp; Vergi İadesi Rehberi</span>
-      <h2 class="section-title">Alışveriş, Ne Nereden Alınır &amp; Kasa Hakemi</h2>
-      <p class="section-subtitle">Kamera, saat, PS5, kozmetik/eczane, Uji matcha, kırtasiye/bıçak, Uniqlo/JINS ve Kasım 2026 tax-free &amp; bagaj kuralları.</p>
+      <span class="section-eyebrow">Uzman Model, Mağaza, Kişisel Liste &amp; Vergi İadesi Rehberi</span>
+      <h2 class="section-title">Alışveriş, Alınacaklar Listem &amp; Kasa Hakemi</h2>
+      <p class="section-subtitle">Kamera, saat, PS5, kırtasiye (Kuru Toga/DelGuard/Sekaido), niş parfüm (Nose Shop/Nile), çocuk giyim (Markey's/Breeze), Kai &amp; Nitori.</p>
     </div>
+    ${renderQuickYenConverterStrip()}
     <div class="subtab-seg">
-      <button class="subtab-seg-btn ${currentShopSubtab === 'catalog' ? 'active' : ''}" onclick="switchShopSubtab('catalog')">Tüm Kategoriler &amp; Rehber (${shoppingData.length})</button>
-      <button class="subtab-seg-btn ${currentShopSubtab === 'taxfree' ? 'active' : ''}" onclick="switchShopSubtab('taxfree')">Tax-Free, Kupon &amp; Kasa Hakemi</button>
+      <button class="subtab-seg-btn ${currentShopSubtab === 'catalog' ? 'active' : ''}" onclick="switchShopSubtab('catalog')">📚 Tüm Kategoriler &amp; Rehber (${shoppingData.length})</button>
+      <button class="subtab-seg-btn ${currentShopSubtab === 'wishlist' ? 'active' : ''}" onclick="switchShopSubtab('wishlist')">✅ Alınacaklar Listem (${doneWishCount}/${allWish.length})</button>
+      <button class="subtab-seg-btn ${currentShopSubtab === 'taxfree' ? 'active' : ''}" onclick="switchShopSubtab('taxfree')">🧮 Tax-Free &amp; Kasa Hakemi</button>
     </div>
   `;
+
+  if (currentShopSubtab === 'wishlist') {
+    const wishCats = ['Tümü', 'Alınacaklar', 'Alınanlar', ...new Set(allWish.map(w => w.category))];
+    const filteredWish = allWish.filter(w => {
+      if (currentWishlistFilter === 'Tümü') return true;
+      if (currentWishlistFilter === 'Alınacaklar') return !w.checked;
+      if (currentWishlistFilter === 'Alınanlar') return w.checked;
+      return w.category === currentWishlistFilter;
+    });
+
+    container.innerHTML = `
+      ${subBarHtml}
+      <div class="editorial-card" style="border-left:4px solid var(--matcha);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <div>
+            <span class="section-eyebrow" style="color:var(--matcha);">Kişisel &amp; Beyzik Özel Alışveriş Listesi</span>
+            <h3 style="font-size:1.05rem; font-weight:800;">Japonya'dan Alınacak Spesifik Ürünler (${doneWishCount}/${allWish.length} Tamamlandı)</h3>
+          </div>
+        </div>
+        <div style="background:var(--bg-subtle); padding:10px 12px; border-radius:var(--radius-md); margin-bottom:12px;">
+          <strong style="font-size:0.82rem; display:block; margin-bottom:6px;">➕ Listeye Kendi Özel Ürününüzü Ekleyin:</strong>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:7px;">
+            <input type="text" id="cw-name" class="search-input" style="padding:7px 10px;" placeholder="Ürün adı (Örn: 2x Roihi Yakı)">
+            <select id="cw-cat" class="search-input" style="padding:7px 10px;">
+              <option value="Kırtasiye">Kırtasiye</option>
+              <option value="Parfüm">Parfüm</option>
+              <option value="Çocuk Giyim">Çocuk Giyim</option>
+              <option value="Kozmetik & Bakım">Kozmetik &amp; Bakım</option>
+              <option value="Ev & Mutfak">Ev &amp; Mutfak</option>
+              <option value="Hatıra & Koleksiyon">Hatıra &amp; Koleksiyon</option>
+              <option value="Özel Eklenen">Özel Eklenen</option>
+            </select>
+            <input type="text" id="cw-store" class="search-input" style="padding:7px 10px;" placeholder="Mağaza (Örn: Sekaido / Ainz)">
+            <input type="number" id="cw-price" class="search-input tabular" style="padding:7px 10px;" placeholder="Tahmini ¥">
+            <input type="text" id="cw-note" class="search-input" style="padding:7px 10px;" placeholder="Not (Beden/Renk/Adet)">
+            <button class="hdr-btn hdr-primary" style="justify-content:center;" onclick="addCustomWishlistItem()">➕ Listeme Ekle</button>
+          </div>
+        </div>
+
+        <div class="pill-filter-row" style="margin-bottom:12px;">
+          ${wishCats.map(c => `<button class="filter-pill-btn ${currentWishlistFilter === c ? 'active' : ''}" onclick="setWishlistCategoryFilter('${escapeAttr(c)}')">${c}</button>`).join('')}
+        </div>
+
+        <div>
+          ${filteredWish.map(w => `
+            <div class="wishlist-row ${w.checked ? 'is-checked' : ''}">
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; flex:1; min-width:0;">
+                <input type="checkbox" ${w.checked ? 'checked' : ''} onchange="toggleWishlistItem('${w.id}', ${w.isCustom})" style="width:20px; height:20px; margin-top:2px; accent-color:var(--matcha); flex-shrink:0;">
+                <div style="min-width:0; flex:1;">
+                  <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <strong style="font-size:0.92rem; ${w.checked ? 'text-decoration:line-through;' : ''}">${escapeHtml(w.name)}</strong>
+                    <span class="stop-cat-tag" style="font-size:0.68rem;">${escapeHtml(w.category)}</span>
+                    <span class="tabular" style="font-size:0.76rem; font-weight:800; color:var(--vermilion);">${escapeHtml(w.priceHint)}</span>
+                  </div>
+                  <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:2px;">📍 <strong>Mağaza:</strong> ${escapeHtml(w.store)}</div>
+                  ${w.customNote ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">💡 ${escapeHtml(w.customNote)}</div>` : ''}
+                </div>
+              </label>
+              <div style="display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap;">
+                <div class="qty-stepper" title="Adet">
+                  <button class="qty-btn" onclick="changeWishlistQty('${w.id}', -1, ${w.isCustom})">−</button>
+                  <span class="tabular" style="font-size:0.78rem; font-weight:800; min-width:26px; text-align:center;">${w.qty}x</span>
+                  <button class="qty-btn" onclick="changeWishlistQty('${w.id}', 1, ${w.isCustom})">+</button>
+                </div>
+                ${w.cardId ? `<button class="action-chip map-route" style="min-height:30px; padding:3px 8px; font-size:0.74rem;" onclick="jumpToShoppingCard('${w.cardId}')">Rehber Kartı →</button>` : ''}
+                ${w.isCustom ? `<button class="action-chip" style="min-height:30px; padding:3px 8px; font-size:0.74rem; color:var(--vermilion);" onclick="deleteCustomWishlistItem('${w.id}')">✕</button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   if (currentShopSubtab === 'taxfree') {
     const tfRules = (taxFreeData.rules || []).map((rule, idx) => `
@@ -1860,6 +2380,20 @@ function renderShopping() {
     });
     if (hubMatches.length) filtered = hubMatches;
   }
+  if (currentShopStatusFilter === 'pending') {
+    filtered = filtered.filter(s => !(appState.shopPurchased[s.id] && appState.shopPurchased[s.id].bought));
+  } else if (currentShopStatusFilter === 'bought') {
+    filtered = filtered.filter(s => !!(appState.shopPurchased[s.id] && appState.shopPurchased[s.id].bought));
+  }
+  if (currentShopSearch && currentShopSearch.trim()) {
+    const qNorm = normalizeOmniText(currentShopSearch);
+    const qTokens = qNorm.split(' ').filter(Boolean);
+    filtered = filtered.filter(s => {
+      const prodStr = Array.isArray(s.suitableProduct) ? s.suitableProduct.join(' ') : String(s.suitableProduct || '');
+      const hay = normalizeOmniText(`${s.title} ${s.category} ${prodStr} ${(s.citiesAndShops || []).join(' ')} ${s.currentPrice || ''}`);
+      return qTokens.every(t => hay.includes(t));
+    });
+  }
 
   const fx = getFxRate();
   let boughtCount = 0;
@@ -1915,18 +2449,12 @@ function renderShopping() {
       </div>
     </div>
 
-    <div class="kpi-strip-grid">
-      <div class="kpi-mini-card">
-        <span class="kpi-mini-label">Tax-Free Eşiği</span>
-        <strong class="kpi-mini-val tabular">¥5.500+</strong>
-      </div>
-      <div class="kpi-mini-card">
-        <span class="kpi-mini-label">Yodobashi / Bic Kupon</span>
-        <strong class="kpi-mini-val tabular" style="color:var(--sky);">+%5 İndirim</strong>
-      </div>
-      <div class="kpi-mini-card">
-        <span class="kpi-mini-label">Mühürlü Poşet</span>
-        <strong class="kpi-mini-val" style="color:var(--vermilion);">Uçuşa Kadar Açma</strong>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+      <input type="search" id="shop-catalog-search" class="search-input" style="flex:1; min-width:210px; padding:8px 12px;" placeholder="🔍 31+ Rehber Kartında Ara (Örn: Kuru Toga, Sekaido, Parfüm, Markey's, Kai, Bıçak)..." value="${escapeAttr(currentShopSearch)}" oninput="handleShopCatalogSearch(this.value)">
+      <div style="display:flex; gap:5px;">
+        <button class="filter-pill-btn ${currentShopStatusFilter === 'all' ? 'active' : ''}" onclick="setShopStatusFilter('all')">Tümü (${shoppingData.length})</button>
+        <button class="filter-pill-btn ${currentShopStatusFilter === 'pending' ? 'active' : ''}" onclick="setShopStatusFilter('pending')">⏳ Kalanlar (${shoppingData.length - boughtCount})</button>
+        <button class="filter-pill-btn ${currentShopStatusFilter === 'bought' ? 'active' : ''}" onclick="setShopStatusFilter('bought')">✅ Alınanlar (${boughtCount})</button>
       </div>
     </div>
 
@@ -1944,7 +2472,7 @@ function renderShopping() {
         const purchaseRec = appState.shopPurchased[item.id] || { bought: false, paidJPY: '' };
         const firstShop = (item.citiesAndShops && item.citiesAndShops[0]) ? item.citiesAndShops[0].split(':')[1] || item.citiesAndShops[0] : 'Tokyo / Kyoto';
         return `
-          <div class="editorial-card shop-card-v2 ${purchaseRec.bought ? 'is-bought' : ''}" style="margin-bottom:0;">
+          <div class="editorial-card shop-card-v2 ${purchaseRec.bought ? 'is-bought' : ''}" id="shop-card-${item.id}" style="margin-bottom:0;">
             <div>
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
                 <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky);">${item.category}</span>
@@ -3296,7 +3824,7 @@ function mergePartnerState(incoming) {
   }
 
   // Conflict-safe merge for Koyo Master state
-  const mapKeys = ['completedStops', 'checklist', 'prepBookings', 'marketBasket', 'basketChecks', 'shopInspections'];
+  const mapKeys = ['completedStops', 'checklist', 'prepBookings', 'marketBasket', 'basketChecks', 'shopInspections', 'personalWishlist'];
   mapKeys.forEach(mk => {
     if (incoming && incoming[mk] && typeof incoming[mk] === 'object') {
       appState[mk] = appState[mk] || {};
@@ -3305,6 +3833,17 @@ function mergePartnerState(incoming) {
       });
     }
   });
+  if (incoming && Array.isArray(incoming.customWishlist)) {
+    appState.customWishlist = appState.customWishlist || [];
+    const existingWIds = new Set(appState.customWishlist.map(w => String(w.id)));
+    incoming.customWishlist.forEach(w => {
+      if (w && !existingWIds.has(String(w.id))) {
+        appState.customWishlist.push(w);
+        existingWIds.add(String(w.id));
+        mergedItems++;
+      }
+    });
+  }
   if (incoming && incoming.notes) {
     appState.notes = appState.notes || {};
     Object.entries(incoming.notes).forEach(([k, v]) => {
@@ -3527,19 +4066,23 @@ function openOverviewModal() {
   let totalStops = 0;
   let completedStops = 0;
   itineraryData.forEach((day) => {
-    (day.stops || []).forEach((s) => {
+    (day.stops || []).forEach((s, sIdx) => {
       totalStops++;
-      if (appState.visitedStops && appState.visitedStops[s.stopId]) completedStops++;
+      const sid = s.stopId || `${day.id}-s${sIdx}`;
+      if (appState.completedStops && appState.completedStops[sid]) completedStops++;
     });
   });
 
   const cardsHtml = itineraryData.map((day, idx) => {
     const stops = day.stops || [];
-    const done = stops.filter(s => appState.visitedStops && appState.visitedStops[s.stopId]).length;
+    const done = stops.filter((s, sIdx) => {
+      const sid = s.stopId || `${day.id}-s${sIdx}`;
+      return appState.completedStops && appState.completedStops[sid];
+    }).length;
     const pct = stops.length ? Math.round((done / stops.length) * 100) : 0;
     const isCurrent = idx === currentDayIndex;
     const booked = typeof bookedTrainAlerts !== 'undefined' && bookedTrainAlerts[idx];
-    const hasNotes = !!(appState.dailyNotes && appState.dailyNotes[day.id]);
+    const hasNotes = !!(appState.notes && appState.notes[day.id]);
     const dayMode = (appState.dayModes && appState.dayModes[day.id]) || {};
     const modeTag = dayMode.rain ? 'Yağmur' : dayMode.lighten ? 'Hafif' : '';
     return `
@@ -3601,9 +4144,9 @@ function handleSearch(term) {
   const stopResults = [];
   const mealResults = [];
   itineraryData.forEach((day, dIdx) => {
-    day.stops.forEach(stop => {
+    day.stops.forEach((stop, sIdx) => {
       if (`${stop.name} ${stop.details} ${day.title} ${day.city}`.toLowerCase().includes(q)) {
-        stopResults.push({ day, stop, dIdx });
+        stopResults.push({ day, stop, dIdx, sIdx });
       }
     });
     [...(day.lunchOptions || []), ...(day.dinnerOptions || [])].forEach(m => {
@@ -3613,7 +4156,10 @@ function handleSearch(term) {
     });
   });
 
-  const shopResults = (shoppingData || []).filter(s => `${s.title} ${s.category} ${(s.citiesAndShops || []).join(' ')}`.toLowerCase().includes(q));
+  const shopResults = (shoppingData || []).filter(s => {
+    const prodStr = Array.isArray(s.suitableProduct) ? s.suitableProduct.join(' ') : String(s.suitableProduct || '');
+    return `${s.title} ${s.category} ${prodStr} ${(s.citiesAndShops || []).join(' ')}`.toLowerCase().includes(q);
+  });
   const tipResults = (proTipsData || []).filter(t => `${t.title} ${t.desc} ${t.category}`.toLowerCase().includes(q));
   const basketResults = (marketBasketsData || []).filter(b => `${b.title} ${b.when} ${b.where} ${(b.items || []).join(' ')}`.toLowerCase().includes(q));
   const prepResults = (bookingsPrepData || []).filter(p => `${p.title} ${p.action} ${p.note} ${p.date}`.toLowerCase().includes(q));
@@ -3636,14 +4182,17 @@ function handleSearch(term) {
       <button class="action-chip" onclick="clearGlobalSearch()">✕ Aramayı Temizle</button>
     </div>
     <div class="grid-2col">
-      ${stopResults.map(r => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
-          <span class="hero-badge" style="background:var(--indigo); display:inline-block; margin-bottom:6px;">Rota • ${formatDayMonth(r.day.date, '/')} (${r.day.city})</span>
-          <h3 style="font-size:0.97rem; font-weight:800;">${r.stop.time} — ${r.stop.name}</h3>
-          <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.stop.details}</p>
-          <div style="font-size:0.78rem; font-weight:800; color:var(--vermilion);">Günü Aç →</div>
-        </div>
-      `).join('')}
+      ${stopResults.map(r => {
+        const sid = r.stop.stopId || `${r.day.id}-s${r.sIdx}`;
+        return `
+          <div class="editorial-card" style="margin-bottom:0; cursor:pointer;" onclick="jumpToStopFromSearch(${r.dIdx}, '${escapeAttr(sid)}')">
+            <span class="hero-badge" style="background:var(--indigo); display:inline-block; margin-bottom:6px;">Rota • ${formatDayMonth(r.day.date, '/')} (${r.day.city})</span>
+            <h3 style="font-size:0.97rem; font-weight:800;">${r.stop.time} — ${r.stop.name}</h3>
+            <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${r.stop.details}</p>
+            <div style="font-size:0.78rem; font-weight:800; color:var(--vermilion);">Durağa Git →</div>
+          </div>
+        `;
+      }).join('')}
       ${mealResults.map(r => `
         <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--matcha);" onclick="clearGlobalSearch(); selectDay(${r.dIdx});">
           <span class="halal-verify-badge" style="margin-bottom:6px;">Helal Restoran • ${formatDayMonth(r.day.date, '/')}</span>
@@ -3653,11 +4202,11 @@ function handleSearch(term) {
         </div>
       `).join('')}
       ${shopResults.map(s => `
-        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--sky);" onclick="clearGlobalSearch(); switchTab('shopping');">
+        <div class="editorial-card" style="margin-bottom:0; cursor:pointer; border-left:4px solid var(--sky);" onclick="jumpToShoppingCard('${escapeAttr(s.id)}')">
           <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky); margin-bottom:6px; display:inline-block;">Alışveriş • ${s.category}</span>
           <h3 style="font-size:0.97rem; font-weight:800;">${s.title}</h3>
           <p style="font-size:0.81rem; color:var(--text-secondary); margin:4px 0;">${s.currentPrice}</p>
-          <div style="font-size:0.78rem; font-weight:800; color:var(--sky);">Alışveriş Rehberine Git →</div>
+          <div style="font-size:0.78rem; font-weight:800; color:var(--sky);">Rehber Kartını Aç →</div>
         </div>
       `).join('')}
       ${basketResults.map(b => `
@@ -4661,6 +5210,7 @@ function performOmniSearch(rawQuery) {
   const results = {
     exactDateDay: null,
     action: null,
+    fxCalc: null,
     days: [],
     stops: [],
     halal: [],
@@ -4676,6 +5226,15 @@ function performOmniSearch(rawQuery) {
     const dIdx = itineraryData.findIndex(d => d.date === dateIso);
     if (dIdx !== -1) {
       results.exactDateDay = { idx: dIdx, day: itineraryData[dIdx] };
+    }
+  }
+
+  // 1b. Instant Yen Currency & Tax-Free Math intent
+  const fxNumMatch = rawQuery.match(/^(?:¥|jpy\s*)?(\d{3,7})(?:\s*(?:yen|jpy|¥|tl|usd))?$/i) || rawQuery.match(/(\d{3,7})\s*(?:yen|jpy|¥)/i);
+  if (fxNumMatch) {
+    const jpyVal = parseInt(fxNumMatch[1], 10);
+    if (jpyVal >= 100 && jpyVal !== 2026) {
+      results.fxCalc = computeYenBreakdown(jpyVal);
     }
   }
 
@@ -4714,6 +5273,7 @@ function performOmniSearch(rawQuery) {
         results.stops.push({
           dIdx,
           sIdx,
+          stopId: s.stopId || `${d.id}-s${sIdx}`,
           name: s.name,
           time: s.time,
           date: d.date,
@@ -4940,7 +5500,7 @@ function renderOmniSearchResults(results, query) {
   const tokens = normalizeOmniText(query).split(' ').filter(t => t.length > 0);
   const totalCount = (results.days.length + results.stops.length + results.halal.length + results.market.length + results.shop.length + results.tix.length + results.acc.length) + (results.exactDateDay ? 1 : 0);
 
-  if (totalCount === 0 && !results.action) {
+  if (totalCount === 0 && !results.action && !results.fxCalc) {
     return `
       <div class="omni-empty-box">
         <div style="font-size:2rem; margin-bottom:6px;">🔍</div>
@@ -4958,6 +5518,20 @@ function renderOmniSearchResults(results, query) {
   }
 
   let html = '';
+
+  // Live Currency & Tax-Free Math card
+  if (results.fxCalc) {
+    const b = results.fxCalc;
+    html += `
+      <div class="omni-quick-action-banner" style="border-left:4px solid var(--matcha);">
+        <div style="min-width:0; flex:1;">
+          <span style="font-size:0.7rem; font-weight:900; color:var(--matcha); letter-spacing:0.04em; display:block;">💴 ANLIK KUR &amp; TAX-FREE HESAPLAYICI</span>
+          ${buildQuickFxReadoutHtml(b)}
+        </div>
+        <button class="action-chip map-route" onclick="executeOmniAction('expense', ${b.jpy}, 'Hızlı Harcama (¥${b.jpy})')">➕ Bütçeye Ekle</button>
+      </div>
+    `;
+  }
 
   // Smart action banner
   if (results.action) {
@@ -5055,8 +5629,8 @@ function renderOmniSearchResults(results, query) {
           <div class="omni-card-meta">Gün ${s.dIdx + 1} (${formatDayMonth(s.date, '/')} ${s.dayName || ''}) • ${s.city}</div>
           <p class="omni-card-desc">${s.details ? s.details.slice(0, 110) + '...' : ''}</p>
           <div class="omni-card-actions">
-            <button class="action-chip map-route" onclick="executeOmniAction('jump', ${s.dIdx})">📅 Güne Git</button>
-            <a href="${buildPlaceUrl(s.mapsQuery || s.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Konum</a>
+            <button class="action-chip map-route" onclick="jumpToStopFromSearch(${s.dIdx}, '${escapeAttr(s.stopId)}')">📍 Durağa Git</button>
+            <a href="${buildPlaceUrl(s.mapsQuery || s.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">🗺️ Konum</a>
           </div>
         </div>
       `;
@@ -5120,7 +5694,7 @@ function renderOmniSearchResults(results, query) {
           <div class="omni-card-meta">${(s.shops || []).slice(0, 2).join(' • ')}</div>
           <p class="omni-card-desc">${s.price || s.budget || ''}</p>
           <div class="omni-card-actions">
-            <button class="action-chip map-route" onclick="closeAiAssistantModal(); switchTab('shopping');">🛍️ Alışverişte Gör</button>
+            <button class="action-chip map-route" onclick="jumpToShoppingCard('${escapeAttr(s.id)}')">🛍️ Rehber Kartını Aç</button>
           </div>
         </div>
       `;

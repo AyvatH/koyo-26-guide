@@ -2864,3 +2864,203 @@ body.dark-mode .tl-marker {
   animation: spinSlow 0.6s linear infinite;
 }
 
+@keyframes omniPulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(224, 77, 67, 0.55); transform: scale(1); }
+  35% { box-shadow: 0 0 0 10px rgba(224, 77, 67, 0.18); transform: scale(1.012); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 77, 67, 0); transform: scale(1); }
+}
+
+.omni-highlight-pulse {
+  animation: omniPulseGlow 1.8s ease-out 1;
+  border-color: var(--vermilion) !important;
+}
+
+/* ==========================================================================
+   V23: 1-DAY LOOP VISUAL INFOGRAPHIC CARDS (KAWAGUCHIKO / KYOTO / NARA / OSAKA)
+   ========================================================================== */
+.loop-infographic-card {
+  background: linear-gradient(165deg, var(--bg-surface) 0%, var(--bg-subtle) 100%);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.loop-header-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-bottom: 2px dashed var(--border-strong);
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.loop-title-main {
+  font-family: var(--font-serif);
+  font-size: 1.18rem;
+  font-weight: 900;
+  color: var(--text-main);
+  line-height: 1.22;
+}
+
+.loop-subtitle-tag {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--vermilion);
+  margin-top: 3px;
+}
+
+.loop-steps-track {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.loop-step-node {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 11px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+}
+
+.loop-step-node:hover {
+  transform: translateY(-2px);
+  border-color: var(--vermilion);
+  box-shadow: var(--shadow-sm);
+}
+
+.loop-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--vermilion);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.loop-transit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .loop-transit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.loop-transit-box {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+}
+
+.loop-transit-box.getting-there {
+  border-top: 4px solid var(--indigo);
+}
+
+.loop-transit-box.around-area {
+  border-top: 4px solid var(--vermilion);
+}
+
+.loop-box-heading {
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.loop-tip-ribbon {
+  background: var(--gold-soft);
+  border: 1px solid rgba(180, 123, 21, 0.35);
+  color: var(--text-main);
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   V23: QUICK YEN CONVERTER & PERSONAL WISHLIST ("ALINACAKLAR LİSTEM")
+   ========================================================================== */
+.quick-fx-strip {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.1), rgba(16, 185, 129, 0.08));
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.wishlist-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.wishlist-row.is-checked {
+  background: var(--bg-subtle);
+  opacity: 0.76;
+}
+
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 2px 5px;
+}
+
+.qty-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-weight: 900;
+  font-size: 0.85rem;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.qty-btn:hover {
+  background: var(--border-subtle);
+}
+
+
