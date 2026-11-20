@@ -136,6 +136,11 @@ function initApp() {
     renderBudget();
     renderGuide();
     setupEventListeners();
+    if (typeof window !== 'undefined' && typeof setTimeout === 'function' && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      setTimeout(() => {
+        if (typeof refreshAllLiveTelemetry === 'function') refreshAllLiveTelemetry(true);
+      }, 900);
+    }
   } catch (err) {
     console.error("Başlatma hatası:", err);
   }
@@ -2461,6 +2466,7 @@ function renderQuickYenConverterStrip() {
           ${[1000, 2500, 3800, 5500, 12000, 25000].map(p => `
             <button class="action-chip" style="min-height:28px; padding:2px 8px; font-size:0.74rem;" onclick="updateQuickFxInput(${p})">¥${p.toLocaleString()}</button>
           `).join('')}
+          <button class="action-chip map-place" style="min-height:28px; padding:2px 8px; font-size:0.74rem;" onclick="fetchLiveCurrencyRates(false)">🔄 Canlı Kur</button>
         </div>
       </div>
       <div style="display:grid; grid-template-columns:minmax(130px, 180px) 1fr auto; gap:10px; align-items:center;">
@@ -3248,6 +3254,7 @@ function renderBudget() {
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
             <h3 style="font-size:0.96rem; font-weight:800;">Üçlü Döviz &amp; Tax-Free Çevirici (<span class="tabular">1$ = ${fx}¥ / ₺${getTryPerUsd()}</span>)</h3>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="action-chip map-place" style="min-height:28px; padding:2px 8px; font-size:0.71rem;" onclick="fetchLiveCurrencyRates(false)">🔄 Canlı Kur Çek</button>
               <label style="font-size:0.71rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:4px;">
                 1$ = ¥
                 <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${fx}" class="search-input tabular" style="width:66px; min-height:32px; padding:3px 6px;" onchange="updatePlanningFxRate(this.value)">
@@ -3501,10 +3508,373 @@ function deleteExpense(idx) {
 }
 
 // ==========================================================================
-// TAB 5: REHBER (TIPS + CHECKLIST + LUGGAGE SIMULATOR + .ICS & MAP TOOLS)
+// TAB 5: REHBER, LIVE TELEMETRY HUB, LUGGAGE SIMULATOR & .ICS TOOLS
 // ==========================================================================
 
 let currentTipSearch = '';
+let liveTelemetryLoading = false;
+
+const LIVE_WEATHER_CITIES = [
+  { key: 'Tokyo', label: 'Tokyo', kanji: '東京', lat: 35.6895, lon: 139.6917, fallback: { temp: 14, feelsLike: 12, max: 16, min: 8, rainProb: 15, code: 1 } },
+  { key: 'Kawaguchiko', label: 'Kawaguchiko / Fuji', kanji: '河口湖', lat: 35.4982, lon: 138.7686, fallback: { temp: 8, feelsLike: 5, max: 11, min: 1, rainProb: 10, code: 0 } },
+  { key: 'Osaka', label: 'Osaka', kanji: '大阪', lat: 34.6937, lon: 135.5023, fallback: { temp: 15, feelsLike: 14, max: 17, min: 9, rainProb: 20, code: 2 } },
+  { key: 'Kyoto', label: 'Kyoto', kanji: '京都', lat: 35.0116, lon: 135.7681, fallback: { temp: 13, feelsLike: 11, max: 15, min: 6, rainProb: 20, code: 1 } },
+  { key: 'Nara', label: 'Nara', kanji: '奈良', lat: 34.6851, lon: 135.8048, fallback: { temp: 13, feelsLike: 11, max: 15, min: 5, rainProb: 15, code: 1 } }
+];
+
+function decodeWmoWeather(code) {
+  const c = Number(code);
+  if (c === 0) return { icon: '☀️', label: 'Açık & Net', isRain: false };
+  if (c === 1) return { icon: '🌤️', label: 'Çoğunlukla Açık', isRain: false };
+  if (c === 2) return { icon: '⛅', label: 'Parçalı Bulutlu', isRain: false };
+  if (c === 3) return { icon: '☁️', label: 'Kapalı', isRain: false };
+  if (c === 45 || c === 48) return { icon: '🌫️', label: 'Sisli / Puslu', isRain: false };
+  if (c >= 51 && c <= 67) return { icon: '🌧️', label: 'Yağmurlu', isRain: true };
+  if (c >= 71 && c <= 77) return { icon: '❄️', label: 'Karlı', isRain: true };
+  if (c >= 80) return { icon: '🌦️', label: 'Sağanak Geçişi', isRain: true };
+  return { icon: '🌤️', label: 'Sonbahar Serinliği', isRain: false };
+}
+
+function buildFallbackWeatherCache() {
+  const cities = {};
+  LIVE_WEATHER_CITIES.forEach(c => {
+    const wmo = decodeWmoWeather(c.fallback.code);
+    cities[c.key] = {
+      key: c.key,
+      label: c.label,
+      kanji: c.kanji,
+      temp: c.fallback.temp,
+      feelsLike: c.fallback.feelsLike,
+      max: c.fallback.max,
+      min: c.fallback.min,
+      rainProb: c.fallback.rainProb,
+      code: c.fallback.code,
+      icon: wmo.icon,
+      desc: wmo.label,
+      isRain: wmo.isRain
+    };
+  });
+  return { updatedAt: 'Kasım Sonu İklim Ortalaması (Çevrimdışı)', isLive: false, cities };
+}
+
+function getEffectiveWeatherCache() {
+  if (appState.liveWeatherCache && appState.liveWeatherCache.cities && Object.keys(appState.liveWeatherCache.cities).length >= 5) {
+    return appState.liveWeatherCache;
+  }
+  return buildFallbackWeatherCache();
+}
+
+async function fetchLiveJapanWeather(silent = false) {
+  if (typeof fetch !== 'function' || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    if (!appState.liveWeatherCache) {
+      appState.liveWeatherCache = buildFallbackWeatherCache();
+      saveMasterState();
+    }
+    if (!silent) showToast('📴 Çevrimdışı mod: Önbellekteki hava durumu gösteriliyor');
+    return appState.liveWeatherCache;
+  }
+  try {
+    const lats = LIVE_WEATHER_CITIES.map(c => c.lat).join(',');
+    const lons = LIVE_WEATHER_CITIES.map(c => c.lon).join(',');
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const payload = await res.json();
+    const list = Array.isArray(payload) ? payload : [payload];
+    const cities = {};
+    LIVE_WEATHER_CITIES.forEach((cityMeta, idx) => {
+      const item = list[idx] || {};
+      const cur = item.current || {};
+      const daily = item.daily || {};
+      const fb = cityMeta.fallback;
+      const temp = Number.isFinite(Number(cur.temperature_2m)) ? Math.round(Number(cur.temperature_2m)) : fb.temp;
+      const feelsLike = Number.isFinite(Number(cur.apparent_temperature)) ? Math.round(Number(cur.apparent_temperature)) : fb.feelsLike;
+      const code = Number.isFinite(Number(cur.weather_code)) ? Number(cur.weather_code) : fb.code;
+      const max = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(Number(daily.temperature_2m_max[0])) : fb.max;
+      const min = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(Number(daily.temperature_2m_min[0])) : fb.min;
+      const rainProb = Array.isArray(daily.precipitation_probability_max) && Number.isFinite(Number(daily.precipitation_probability_max[0])) ? Math.round(Number(daily.precipitation_probability_max[0])) : fb.rainProb;
+      const wmo = decodeWmoWeather(code);
+      cities[cityMeta.key] = {
+        key: cityMeta.key,
+        label: cityMeta.label,
+        kanji: cityMeta.kanji,
+        temp,
+        feelsLike,
+        max,
+        min,
+        rainProb,
+        code,
+        icon: wmo.icon,
+        desc: wmo.label,
+        isRain: wmo.isRain || rainProb >= 60
+      };
+    });
+    appState.liveWeatherCache = {
+      updatedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      isLive: true,
+      cities
+    };
+    saveMasterState();
+    if (!silent) showToast('🌤️ 5 Japonya şehri için canlı hava durumu güncellendi!');
+    return appState.liveWeatherCache;
+  } catch (err) {
+    if (!appState.liveWeatherCache) appState.liveWeatherCache = buildFallbackWeatherCache();
+    if (!silent) showToast('⚠️ Hava durumu sunucusuna ulaşılamadı, önbellek kullanılıyor');
+    return appState.liveWeatherCache;
+  }
+}
+
+async function fetchLiveCurrencyRates(silent = false) {
+  if (typeof fetch !== 'function' || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    if (!silent) showToast(`📴 Çevrimdışı: Kayıtlı kur (1$ = ¥${getFxRate()} / ₺${getTryPerUsd()}) aktif`);
+    return { fxRate: getFxRate(), tryPerUsd: getTryPerUsd(), isLive: false };
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const rates = (data && data.rates) || {};
+    const jpyRaw = Number(rates.JPY);
+    const tryRaw = Number(rates.TRY);
+    if (Number.isFinite(jpyRaw) && jpyRaw >= 80 && jpyRaw <= 250) {
+      appState.fxRate = Math.round(jpyRaw * 10) / 10;
+    }
+    if (Number.isFinite(tryRaw) && tryRaw >= 10 && tryRaw <= 150) {
+      appState.tryPerUsd = Math.round(tryRaw * 100) / 100;
+    }
+    appState.fxUpdatedAt = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    appState.fxIsLive = true;
+    saveMasterState();
+    renderBudget();
+    renderShopping();
+    renderGuide();
+    if (!silent) showToast(`💴 Canlı Kur Güncellendi: 1$ = ¥${appState.fxRate} | 1$ = ₺${appState.tryPerUsd}`);
+    return { fxRate: appState.fxRate, tryPerUsd: appState.tryPerUsd, isLive: true };
+  } catch (err) {
+    if (!silent) showToast(`⚠️ Kur servisine erişilemedi; kayıtlı kur (1$ = ¥${getFxRate()}) korunuyor`);
+    return { fxRate: getFxRate(), tryPerUsd: getTryPerUsd(), isLive: false };
+  }
+}
+
+async function refreshAllLiveTelemetry(silent = false) {
+  if (liveTelemetryLoading) return;
+  liveTelemetryLoading = true;
+  try {
+    await Promise.all([fetchLiveJapanWeather(true), fetchLiveCurrencyRates(true)]);
+    if (!silent) showToast(`📡 Canlı Hava Durumu & Kur (1$ = ¥${getFxRate()} / ₺${getTryPerUsd()}) güncellendi!`);
+  } finally {
+    liveTelemetryLoading = false;
+    renderGuide();
+    renderBudget();
+    renderShopping();
+  }
+}
+
+function switchTelemetryHubTab(tabId) {
+  appState.telemetryHubTab = tabId;
+  saveMasterState();
+  renderGuide();
+}
+
+function jumpToTelemetryHubTab(tabId) {
+  closeAiAssistantModal();
+  clearGlobalSearch();
+  appState.telemetryHubTab = tabId || 'koyo';
+  saveMasterState();
+  switchTab('guide');
+  renderGuide();
+  setTimeout(() => {
+    const el = document.getElementById('live-telemetry-hub-mount');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 80);
+}
+
+function resolveActiveCityKeyForDay(dayObj) {
+  const raw = ((dayObj && dayObj.city) || 'Tokyo').toLowerCase();
+  if (raw.includes('kawaguchiko') || raw.includes('fuji')) return 'Kawaguchiko';
+  if (raw.includes('nara')) return 'Nara';
+  if (raw.includes('kyoto')) return 'Kyoto';
+  if (raw.includes('osaka') || raw.includes('kobe') || raw.includes('himeji')) return 'Osaka';
+  return 'Tokyo';
+}
+
+function renderTelemetryFieldTabContent(activeTab) {
+  const koyoList = (typeof EMBEDDED_KOYO_NIGHT_SPOTS !== 'undefined' && Array.isArray(EMBEDDED_KOYO_NIGHT_SPOTS)) ? EMBEDDED_KOYO_NIGHT_SPOTS : [];
+  const stationList = (typeof EMBEDDED_STATION_EXIT_GUIDE !== 'undefined' && Array.isArray(EMBEDDED_STATION_EXIT_GUIDE)) ? EMBEDDED_STATION_EXIT_GUIDE : [];
+  const masjidList = (typeof EMBEDDED_MASJID_PRAYER_MAP !== 'undefined' && Array.isArray(EMBEDDED_MASJID_PRAYER_MAP)) ? EMBEDDED_MASJID_PRAYER_MAP : [];
+  const floorsList = (typeof EMBEDDED_STORE_FLOOR_PLANS !== 'undefined' && Array.isArray(EMBEDDED_STORE_FLOOR_PLANS)) ? EMBEDDED_STORE_FLOOR_PLANS : [];
+
+  if (activeTab === 'koyo') {
+    return `
+      <div class="telemetry-subgrid">
+        ${koyoList.map(item => `
+          <div class="telemetry-intel-card" style="border-left:3px solid var(--vermilion);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+              <strong style="font-size:0.86rem; color:var(--text-main);">${item.name}</strong>
+              <span class="stop-cat-tag" style="background:var(--vermilion-soft); color:var(--vermilion); flex-shrink:0;">${item.city || ''}</span>
+            </div>
+            <div style="font-size:0.74rem; color:var(--gold); font-weight:700; margin-bottom:4px;">🍁 Zirve: ${item.peakWindow || ''} • 🌙 ${item.lightUpHours || ''}</div>
+            <div style="font-size:0.73rem; color:var(--vermilion); font-weight:700; margin-bottom:4px;">🎫 Giriş: ${item.fee || ''}</div>
+            <p style="font-size:0.76rem; color:var(--text-secondary); margin-bottom:4px; line-height:1.42;">📸 <strong>Fotoğraf Sırrı:</strong> ${item.photoSecret || ''}</p>
+            <p style="font-size:0.74rem; color:var(--text-muted); margin-bottom:6px; line-height:1.4;">🧥 <strong>Termal İpucu:</strong> ${item.thermalTip || ''}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span style="font-size:0.71rem; color:var(--text-muted);">🚉 ${item.stationExit || ''}</span>
+              <a href="${buildPlaceUrl(item.mapsQuery || item.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:26px; padding:2px 8px; font-size:0.71rem;">📍 Harita</a>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (activeTab === 'station') {
+    return `
+      <div class="telemetry-subgrid">
+        ${stationList.map(item => `
+          <div class="telemetry-intel-card" style="border-left:3px solid var(--sky);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+              <strong style="font-size:0.86rem; color:var(--text-main);">${item.station}</strong>
+              <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky); flex-shrink:0;">${item.city}</span>
+            </div>
+            <div style="font-size:0.73rem; color:var(--text-muted); margin-bottom:4px;">🚆 ${item.line}</div>
+            <div style="font-size:0.76rem; color:var(--matcha); font-weight:800; margin-bottom:4px; line-height:1.4;">🛗 25kg Valiz Asansörlü Çıkış: ${item.elevatorExit}</div>
+            <p style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px; line-height:1.4;">🛅 <strong>Coin Locker:</strong> ${item.lockerSpot}</p>
+            <p style="font-size:0.74rem; color:var(--vermilion); margin-bottom:6px; line-height:1.4;">⚠️ <strong>Kritik Kural:</strong> ${item.criticalRule}</p>
+            <a href="${buildPlaceUrl(item.mapsQuery || item.station)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:26px; padding:2px 8px; font-size:0.71rem;">📍 Çıkışı Haritada Aç</a>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (activeTab === 'masjid') {
+    return `
+      <div class="telemetry-subgrid">
+        ${masjidList.map(item => `
+          <div class="telemetry-intel-card" style="border-left:3px solid var(--matcha);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+              <strong style="font-size:0.86rem; color:var(--text-main);">${item.name}</strong>
+              <span class="halal-verify-badge" style="flex-shrink:0;">${item.city}</span>
+            </div>
+            <div style="font-size:0.74rem; color:var(--text-main); font-weight:700; margin-bottom:3px;">🏢 ${item.floorOrSpot}</div>
+            <div style="font-size:0.73rem; color:var(--matcha); font-weight:700; margin-bottom:4px;">🕒 ${item.hours} • 💧 Abdesthane (Wudu) Var</div>
+            <p style="font-size:0.76rem; color:var(--text-secondary); margin-bottom:6px; line-height:1.42;">💡 ${item.tip}</p>
+            <a href="${buildPlaceUrl(item.mapsQuery || item.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:26px; padding:2px 8px; font-size:0.71rem;">🕌 Konuma Git</a>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="telemetry-subgrid">
+      ${floorsList.map(item => `
+        <div class="telemetry-intel-card" style="border-left:3px solid var(--shinkansen);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+            <strong style="font-size:0.86rem; color:var(--text-main);">${item.store}</strong>
+            <span class="price-verify-badge" style="flex-shrink:0;">${item.city}</span>
+          </div>
+          <div style="font-size:0.73rem; color:var(--sky); font-weight:700; margin-bottom:3px;">🚉 ${item.stationExit}</div>
+          <div style="font-size:0.74rem; color:var(--vermilion); font-weight:800; margin-bottom:4px;">🧾 Tax-Free: ${item.taxFreeFloor}</div>
+          <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; line-height:1.42;">
+            ${Array.isArray(item.floors) ? item.floors.map(f => `• ${f}`).join('<br>') : item.floors}
+          </div>
+          <a href="${buildPlaceUrl(item.mapsQuery || item.store)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:26px; padding:2px 8px; font-size:0.71rem;">🏬 Mağaza Konumu</a>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderLiveTelemetryHubPanel() {
+  const wCache = getEffectiveWeatherCache();
+  const curDay = itineraryData[currentDayIndex] || itineraryData[0];
+  const activeCityKey = resolveActiveCityKeyForDay(curDay);
+  const fx = getFxRate();
+  const tryUsd = getTryPerUsd();
+  const jpy1000Try = Math.round((1000 / fx) * tryUsd);
+  const jpy1000Usd = (1000 / fx).toFixed(2);
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine !== false;
+  const activeTab = appState.telemetryHubTab || 'koyo';
+
+  const weatherCardsHtml = LIVE_WEATHER_CITIES.map(c => {
+    const w = (wCache.cities && wCache.cities[c.key]) || {
+      label: c.label,
+      kanji: c.kanji,
+      temp: c.fallback.temp,
+      feelsLike: c.fallback.feelsLike,
+      max: c.fallback.max,
+      min: c.fallback.min,
+      rainProb: c.fallback.rainProb,
+      icon: '🌤️',
+      desc: 'Sonbahar Serinliği'
+    };
+    const isActiveCity = c.key === activeCityKey;
+    return `
+      <div class="telemetry-weather-chip" style="background:var(--bg-surface); border:${isActiveCity ? '2px solid var(--vermilion)' : '1px solid var(--border-subtle)'}; border-radius:10px; padding:8px 10px; min-width:130px; flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:2px;">
+          <strong style="font-size:0.78rem; color:var(--text-main);">${c.label}</strong>
+          <span style="font-size:1.05rem;">${w.icon}</span>
+        </div>
+        <div class="tabular" style="font-size:1.12rem; font-weight:900; color:${isActiveCity ? 'var(--vermilion)' : 'var(--text-main)'};">
+          ${w.temp}°C <span style="font-size:0.7rem; font-weight:600; color:var(--text-muted);">Hiss: ${w.feelsLike}°</span>
+        </div>
+        <div class="tabular" style="font-size:0.69rem; color:var(--text-secondary); margin-top:2px;">
+          ↑${w.max}° ↓${w.min}° • ☔ %${w.rainProb}
+        </div>
+        <div style="font-size:0.68rem; color:${w.rainProb >= 50 ? 'var(--sky)' : 'var(--matcha)'}; font-weight:700; margin-top:1px;">
+          ${w.desc}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div id="live-telemetry-hub-mount" class="editorial-card" style="border-left:4px solid var(--sky); margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span class="section-eyebrow" style="color:var(--sky); margin:0;">14 UZMAN AJAN &amp; CANLI API MERKEZİ</span>
+            <span class="${wCache.isLive && isOnline ? 'halal-verify-badge' : 'price-verify-badge'}" style="font-size:0.65rem;">
+              ${wCache.isLive && isOnline ? '🟢 Canlı API Verisi' : '📦 Çevrimdışı Önbellek Hazır'}
+            </span>
+          </div>
+          <h3 style="font-size:1.04rem; font-weight:900; margin-top:2px;">📡 Canlı Japonya Hava Durumu, Kur &amp; Saha İstihbarat Merkezi</h3>
+        </div>
+        <button id="live-telemetry-refresh-btn" class="action-chip map-route" onclick="refreshAllLiveTelemetry(false)" style="min-height:34px; font-weight:800;">
+          🔄 <span>Canlı Hava &amp; Kur Çek</span>
+        </button>
+      </div>
+
+      <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px;">
+        ${weatherCardsHtml}
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; background:var(--card-tint); border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin-bottom:12px; font-size:0.78rem;">
+        <div class="tabular" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span>💱 <strong>1$ = ¥${fx}</strong> / <strong>₺${tryUsd}</strong></span>
+          <span style="color:var(--text-muted);">|</span>
+          <span>💴 <strong>¥1.000 = ~₺${jpy1000Try}</strong> ($${jpy1000Usd})</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:0.69rem; color:var(--text-muted);">
+            Güncelleme: ${appState.fxUpdatedAt || wCache.updatedAt}
+          </span>
+          <button class="action-chip" onclick="switchTab('budget')" style="min-height:26px; padding:2px 8px; font-size:0.7rem;">Bütçe &amp; Çevirici →</button>
+        </div>
+      </div>
+
+      <div class="pill-filter-row" style="margin-bottom:10px;">
+        <button class="filter-pill-btn ${activeTab === 'koyo' ? 'active' : ''}" onclick="switchTelemetryHubTab('koyo')">🍁 Kōyō Gece Işıklandırmaları (10)</button>
+        <button class="filter-pill-btn ${activeTab === 'station' ? 'active' : ''}" onclick="switchTelemetryHubTab('station')">🛗 İstasyon Asansör/Çıkış (10)</button>
+        <button class="filter-pill-btn ${activeTab === 'masjid' ? 'active' : ''}" onclick="switchTelemetryHubTab('masjid')">🕌 Cami &amp; Mescit Haritası (10)</button>
+        <button class="filter-pill-btn ${activeTab === 'floors' ? 'active' : ''}" onclick="switchTelemetryHubTab('floors')">🏬 Mağaza Kat Planları (10)</button>
+      </div>
+
+      ${renderTelemetryFieldTabContent(activeTab)}
+    </div>
+  `;
+}
 
 function handleTipSearch(val) {
   currentTipSearch = String(val || '');
@@ -3522,9 +3892,10 @@ function renderGuide() {
 
   const headerHtml = `
     <div class="section-header-block">
-      <span class="section-eyebrow">Saha Bilgi Bankası, Valiz Planlayıcı &amp; Araçlar</span>
-      <h2 class="section-title">Rehber, Valiz &amp; Takvim</h2>
+      <span class="section-eyebrow">Canlı Hava/Kur Telemetrisi, Saha İstihbaratı, Valiz Planlayıcı &amp; Araçlar</span>
+      <h2 class="section-title">Rehber, Canlı İstihbarat &amp; Valiz</h2>
     </div>
+    ${renderLiveTelemetryHubPanel()}
     <div class="subtab-seg">
       <button class="subtab-seg-btn ${currentGuideSubtab === 'tips' ? 'active' : ''}" onclick="switchGuideSubtab('tips')">💡 Saha Sırları (${proTipsData.length})</button>
       <button class="subtab-seg-btn ${currentGuideSubtab === 'checklist' ? 'active' : ''}" onclick="switchGuideSubtab('checklist')">✅ Kontrol Listesi</button>
@@ -5711,7 +6082,8 @@ function performOmniSearch(rawQuery) {
     market: [],
     shop: [],
     tix: [],
-    acc: []
+    acc: [],
+    intel: []
   };
 
   // 1. Date intent
@@ -5885,6 +6257,68 @@ function performOmniSearch(rawQuery) {
     }
   });
 
+  // 10. Agent Field Intelligence (40 records across 4 domain hubs)
+  const koyoSpots = (typeof EMBEDDED_KOYO_NIGHT_SPOTS !== 'undefined' && Array.isArray(EMBEDDED_KOYO_NIGHT_SPOTS)) ? EMBEDDED_KOYO_NIGHT_SPOTS : [];
+  koyoSpots.forEach(item => {
+    const hay = normalizeOmniText(`koyo yaprak gece isiklandirma ${item.name} ${item.city} ${item.peakWindow} ${item.lightUpHours} ${item.fee} ${item.photoSecret} ${item.thermalTip} ${item.stationExit}`);
+    if (tokens.every(t => hay.includes(t))) {
+      results.intel.push({
+        hubTab: 'koyo',
+        badge: '🍁 KŌYŌ GECE',
+        title: item.name,
+        meta: `${item.city} • ${item.lightUpHours} • ${item.fee}`,
+        desc: `📸 ${item.photoSecret} • 🚉 ${item.stationExit}`,
+        mapsQuery: item.mapsQuery || item.name
+      });
+    }
+  });
+
+  const stationGuides = (typeof EMBEDDED_STATION_EXIT_GUIDE !== 'undefined' && Array.isArray(EMBEDDED_STATION_EXIT_GUIDE)) ? EMBEDDED_STATION_EXIT_GUIDE : [];
+  stationGuides.forEach(item => {
+    const hay = normalizeOmniText(`istasyon cikis asansor valiz coin locker emanet ${item.station} ${item.city} ${item.line} ${item.elevatorExit} ${item.lockerSpot} ${item.criticalRule}`);
+    if (tokens.every(t => hay.includes(t))) {
+      results.intel.push({
+        hubTab: 'station',
+        badge: '🛗 ASANSÖRLÜ ÇIKIŞ',
+        title: item.station,
+        meta: `${item.city} • ${item.line}`,
+        desc: `🛗 ${item.elevatorExit} • 🛅 ${item.lockerSpot}`,
+        mapsQuery: item.mapsQuery || item.station
+      });
+    }
+  });
+
+  const masjidGuides = (typeof EMBEDDED_MASJID_PRAYER_MAP !== 'undefined' && Array.isArray(EMBEDDED_MASJID_PRAYER_MAP)) ? EMBEDDED_MASJID_PRAYER_MAP : [];
+  masjidGuides.forEach(item => {
+    const hay = normalizeOmniText(`cami mescit namaz abdest wudu prayer room ${item.name} ${item.city} ${item.floorOrSpot} ${item.hours} ${item.tip}`);
+    if (tokens.every(t => hay.includes(t))) {
+      results.intel.push({
+        hubTab: 'masjid',
+        badge: '🕌 MESCİT & ABDEST',
+        title: item.name,
+        meta: `${item.city} • ${item.floorOrSpot} • ${item.hours}`,
+        desc: item.tip,
+        mapsQuery: item.mapsQuery || item.name
+      });
+    }
+  });
+
+  const storePlans = (typeof EMBEDDED_STORE_FLOOR_PLANS !== 'undefined' && Array.isArray(EMBEDDED_STORE_FLOOR_PLANS)) ? EMBEDDED_STORE_FLOOR_PLANS : [];
+  storePlans.forEach(item => {
+    const floorsText = Array.isArray(item.floors) ? item.floors.join(' ') : String(item.floors || '');
+    const hay = normalizeOmniText(`magaza kat plani tax free kasa ${item.store} ${item.city} ${item.stationExit} ${item.taxFreeFloor} ${floorsText}`);
+    if (tokens.every(t => hay.includes(t))) {
+      results.intel.push({
+        hubTab: 'floors',
+        badge: '🏬 KAT PLANI',
+        title: item.store,
+        meta: `${item.city} • Tax-Free: ${item.taxFreeFloor}`,
+        desc: Array.isArray(item.floors) ? item.floors.slice(0, 3).join(' | ') : floorsText,
+        mapsQuery: item.mapsQuery || item.store
+      });
+    }
+  });
+
   return results;
 }
 
@@ -5992,7 +6426,8 @@ function executeOmniAction(type, p1, p2) {
 function renderOmniSearchResults(results, query) {
   if (!results) return '';
   const tokens = normalizeOmniText(query).split(' ').filter(t => t.length > 0);
-  const totalCount = (results.days.length + results.stops.length + results.halal.length + results.market.length + results.shop.length + results.tix.length + results.acc.length) + (results.exactDateDay ? 1 : 0);
+  const intelCount = Array.isArray(results.intel) ? results.intel.length : 0;
+  const totalCount = (results.days.length + results.stops.length + results.halal.length + results.market.length + results.shop.length + results.tix.length + results.acc.length + intelCount) + (results.exactDateDay ? 1 : 0);
 
   if (totalCount === 0 && !results.action && !results.fxCalc) {
     return `
@@ -6077,6 +6512,7 @@ function renderOmniSearchResults(results, query) {
     { id: 'halal', label: `🍽️ Helal (${results.halal.length})`, count: results.halal.length },
     { id: 'market', label: `🥤 Otomat & Market (${results.market.length})`, count: results.market.length },
     { id: 'shop', label: `🛍️ Alışveriş (${results.shop.length})`, count: results.shop.length },
+    { id: 'intel', label: `📡 Saha İstihbaratı (${intelCount})`, count: intelCount },
     { id: 'tix', label: `🎫 Biletler (${results.tix.length})`, count: results.tix.length },
     { id: 'acc', label: `🏠 Konaklama (${results.acc.length})`, count: results.acc.length }
   ].filter(f => f.id === 'all' || f.count > 0);
@@ -6236,6 +6672,27 @@ function renderOmniSearchResults(results, query) {
     });
   }
 
+  // 8. Agent Field Intelligence (Kōyō Night Spots, Station Exits, Masjid & Prayer Map, Store Floor Plans)
+  if ((showAll || currentOmniFilter === 'intel') && intelCount > 0) {
+    html += `<div class="omni-group-title">📡 AJAN SAHA İSTİHBARATI (${intelCount})</div>`;
+    results.intel.slice(0, 8).forEach(item => {
+      html += `
+        <div class="omni-card" style="border-left:4px solid var(--sky);">
+          <div class="omni-card-top">
+            <strong class="omni-card-title">${item.title}</strong>
+            <span class="stop-cat-tag" style="background:var(--sky-soft); color:var(--sky);">${item.badge}</span>
+          </div>
+          <div class="omni-card-meta">${item.meta}</div>
+          <p class="omni-card-desc">${item.desc}</p>
+          <div class="omni-card-actions">
+            <button class="action-chip map-route" onclick="jumpToTelemetryHubTab('${escapeAttr(item.hubTab)}')">📡 Saha Merkezinde Aç</button>
+            <a href="${buildPlaceUrl(item.mapsQuery || item.title)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📍 Harita</a>
+          </div>
+        </div>
+      `;
+    });
+  }
+
   return html;
 }
 
@@ -6263,6 +6720,10 @@ function updateOmniView() {
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Kai Tırnak Makası Nitori')">✂️ Kai &amp; Mutfak</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Hatıra Madalyonu Kinen Medaru')">🏅 Hatıra Madalyası</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Sakin Eczane Ainz Tulpe')">💄 Sakin Eczane &amp; Ped</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Asansör Çıkış Exit 6 Exit 4')">🛗 İstasyon Asansör/Çıkış</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Mescit Abdest Parco Namba')">🕌 Cami &amp; AVM Mescidi</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Mağaza Kat Planı Sekaido Uniqlo')">🏬 Mağaza Kat Planları</button>
+          <button class="ai-quick-chip" onclick="setOmniQuickQuery('Koyo Gece Işıklandırma Eikando')">🍁 Kōyō Gece Işıklandırma</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Don Quijote')">🛍️ Donki</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Takadanobaba')">🏠 Evimiz</button>
           <button class="ai-quick-chip" onclick="setOmniQuickQuery('Uçuş')">✈️ Uçuşlar</button>
@@ -6504,7 +6965,8 @@ function runLocalAiAssistant(raw) {
   // 6. Leverage Omni Search
   const omniRes = performOmniSearch(raw);
   if (omniRes) {
-    const total = omniRes.days.length + omniRes.stops.length + omniRes.halal.length + omniRes.market.length + omniRes.shop.length + omniRes.tix.length + omniRes.acc.length;
+    const intelLen = Array.isArray(omniRes.intel) ? omniRes.intel.length : 0;
+    const total = omniRes.days.length + omniRes.stops.length + omniRes.halal.length + omniRes.market.length + omniRes.shop.length + omniRes.tix.length + omniRes.acc.length + intelLen;
     if (total > 0) {
       const summaryItems = [];
       if (omniRes.days.length) summaryItems.push(`📅 <strong>${omniRes.days[0].title}</strong> (Gün ${omniRes.days[0].idx + 1})`);
@@ -6512,6 +6974,7 @@ function runLocalAiAssistant(raw) {
       if (omniRes.halal.length) summaryItems.push(`🍽️ <strong>${omniRes.halal[0].name}</strong> (${omniRes.halal[0].city})`);
       if (omniRes.market.length) summaryItems.push(`🥤 <strong>${omniRes.market[0].brand} ${omniRes.market[0].name}</strong>`);
       if (omniRes.shop.length) summaryItems.push(`🛍️ <strong>${omniRes.shop[0].title}</strong>`);
+      if (intelLen) summaryItems.push(`📡 <strong>${omniRes.intel[0].title}</strong> (${omniRes.intel[0].badge})`);
       return {
         didAction: false,
         html: `Bulunan eşleşmeler (${total} sonuç):<br>${summaryItems.join('<br>')}<div style="margin-top:8px;"><button class="action-chip map-route" onclick="switchAssistantTab('search'); setOmniQuickQuery('${escapeAttr(raw)}');">Tüm Sonuçları Gör (${total})</button></div>`

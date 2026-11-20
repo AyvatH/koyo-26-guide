@@ -3208,5 +3208,23 @@ body.dark-mode .tl-marker {
   box-shadow: 0 2px 8px rgba(197, 48, 39, 0.28);
 }
 
+/* ==========================================================================
+   V25: LIVE TELEMETRY & FIELD INTELLIGENCE HUB
+   ========================================================================== */
+.telemetry-subgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.telemetry-intel-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+  box-shadow: var(--shadow-xs);
+}
+
+
 
 
