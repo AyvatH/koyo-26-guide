@@ -681,7 +681,7 @@ function setTimelineFilter(f) {
 
 function buildBookedAnchorBanner(index) {
   const alerts = {
-    0: { badge: 'Qatar: QR633 (03:20 ISB→05:05 DOH) + QR812 (07:25→22:55 HND)', text: '20 Kas Cuma 23:45’te ISB’de olun (25 kg)! QR812 fiziki biniş kartını ATMA — Heiwajima’ya verilecek. 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
+    0: { badge: 'Qatar: QR633 (03:20 ISB→05:05 DOH) + QR812 (07:25→22:55 HND)', text: '20 Kas Cuma 23:45’te ISB’de olun (25 kg)! QR812 biniş kartını ATMA — Heiwajima’ya verilecek. T3 2F Varış’tan düz yürüyüp asansörle 1F Group Bus Stop’a inin; servis MAVİ OTOBÜSTÜR (The blue bus). 20 Kas 14:00 Welcome Course kaydı şart.', hasIcs: true },
     4: { badge: 'Kawaguchiko Bus 1305/1306 (Bilet Alındı)', text: 'Busta Shinjuku 08:45 (10C/10D) → 10:37 | Dönüş 17:20 (03C/03D) → 19:05. Order #3512551 • Canlı QR linki Cüzdanım’da.', hasIcs: true },
     6: { badge: 'Nozomi 379 (Bilet Alındı)', text: 'Shinagawa 11:46 → Shin-Osaka 14:06 • En geç 11:25’te Shinagawa kapısında olun.', hasIcs: true },
     13: { badge: 'Sagano 7 (Bilet Alındı)', text: 'Torokko Saga 12:02 → Kameoka 12:25 • 11:45’te peronda olun; Bamboo Grove 10:00 başlar.', hasIcs: true },
@@ -804,13 +804,16 @@ const DAY_LOOP_INFOGRAPHICS = {
     steps: [
       { num: 1, title: "03:20 ISB → 05:05 DOH (QR 633)", desc: "20 Kas Cuma gecesi 23:45 check-in • 25 kg bagaj • A350-1000", stopId: "day-0-s0" },
       { num: 2, title: "07:25 DOH → 22:55 Haneda T3 (QR 812)", desc: "2s 20dk Doha aktarması • Fiziki biniş kartını kesinlikle sakla!", stopId: "day-0-s1" },
-      { num: 3, title: "Haneda T3 Gümrük & 00:40/01:40 Servis", desc: "Visit Japan Web QR + T3 1F Otobüs Durağı #7'den ücretsiz servis", stopId: "day-0-s2" },
-      { num: 4, title: "Natural Hot Spring Heiwajima", desc: "QR812 biniş kartıyla ücretsiz kaplıca, dinlenme koltuğu & sabah kahvaltısı", stopId: "day-0-s3" }
+      { num: 3, title: "Haneda T3 Gümrük & Shuttle Yönü", desc: "2F Varış'tan düz ilerleyip grup otobüsleri asansörüyle 1F Group Bus Stop'a inin", stopId: "day-0-s2" },
+      { num: 4, title: "Heiwajima Servisi (Mavi Otobüs)", desc: "1F Group Bus Stop peronundan MAVİ OTOBÜS (The blue bus) • 00:40/01:40 kalkış", stopId: "day-0-s3" }
     ],
-    gettingThereTitle: "🚌 GETTING THERE (Haneda T3 → Heiwajima)",
+    gettingThereTitle: "🚌 SHUTTLE BUS STOP BİLGİSİ (Haneda T3 → Heiwajima)",
     gettingThereHtml: `
-      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
-        • <strong>Qatar Airways Welcome Shuttle:</strong> T3 1. Kat Grup Otobüs Durağı (<strong>00:40 / 01:40 / 02:40 • ÜCRETSİZ</strong>)<br>
+      <div style="font-size:0.79rem; line-height:1.48; color:var(--text-secondary);">
+        • <strong>Yön Tarifi (2F → 1F):</strong> Haneda Airport Terminal 3 <strong>2. Kat Varış Lobisinden (Arrival Lobby 2F)</strong> düz ilerleyin ve grup otobüsleri için olan asansörü (yürüyen merdiveni) kullanarak 1. Katta bulunan <strong>Group Bus Stop (Grup Otobüs Durağı / 団体バス乗降場)</strong> peronuna inin.<br>
+        • <strong>Otobüs Rengi:</strong> <strong>MAVİ RENKLİ OTOBÜS (The blue bus)</strong> Natural Hot Spring Heiwajima kaplıcasına giden ücretsiz karşılama servisidir.<br>
+        • <strong>Kalkış Saatleri:</strong> <strong>00:40 / 01:40 / 02:40</strong> (Rezervasyon ismi ve QR812 biniş kartı kontrol edilir • ÜCRETSİZ)<br>
+        • <em style="color:var(--text-muted);">"From the arrival lobby on the second floor of Haneda Airport Terminal 3, go straight and take the elevator (escalator) for group buses to the group bus stop on the first floor. The blue bus is the shuttle bus going to Heiwajima Natural Hot Springs."</em><br>
         • <strong>Alternatif Taksi:</strong> ~15 dk (~¥3.500)
       </div>
     `,
