@@ -6,9 +6,10 @@
   /* Washi Paper & Ai-zome Indigo Surface System */
   --bg: #f5f1e8;
   --bg-elevated: #fcfaf5;
+  --bg-surface: #ffffff;
   --bg-subtle: #ece6d9;
   --bg-muted: #e3dccb;
-  --bg-glass: rgba(245, 241, 232, 0.86);
+  --bg-glass: rgba(245, 241, 232, 0.88);
   --card-bg: #ffffff;
   --card-tint: #faf7f0;
 
@@ -53,12 +54,13 @@
 }
 
 body.dark-mode {
-  /* Sumi-e Obsidian Palette */
+  /* Sumi-e Obsidian Palette (Midnight Tokyo) */
   --bg: #0b1019;
   --bg-elevated: #121a28;
+  --bg-surface: #131b29;
   --bg-subtle: #182234;
   --bg-muted: #202d44;
-  --bg-glass: rgba(11, 16, 25, 0.86);
+  --bg-glass: rgba(11, 16, 25, 0.88);
   --card-bg: #131b29;
   --card-tint: #172133;
 
@@ -73,6 +75,8 @@ body.dark-mode {
   --vermilion: #e04d43;
   --vermilion-dark: #b93128;
   --vermilion-soft: rgba(224, 77, 67, 0.15);
+  --indigo: #60a5fa;
+  --indigo-mid: #3b82f6;
   --indigo-soft: rgba(96, 165, 250, 0.12);
   --matcha: #34d399;
   --matcha-soft: rgba(52, 211, 153, 0.14);
@@ -84,6 +88,111 @@ body.dark-mode {
   --sky-soft: rgba(56, 189, 248, 0.14);
 
   --shadow-dock: 0 16px 40px -6px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+body.theme-momiji {
+  /* Kyoto Kōyō Autumn Maple & Warm Amber Parchment */
+  --bg: #fdf5ec;
+  --bg-elevated: #fffaf4;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f5e6d5;
+  --bg-muted: #ebd5bd;
+  --bg-glass: rgba(253, 245, 236, 0.88);
+  --card-bg: #ffffff;
+  --card-tint: #fcf3e8;
+
+  --text-main: #27130c;
+  --text-secondary: #522e22;
+  --text-muted: #855a4a;
+
+  --border: rgba(120, 45, 20, 0.11);
+  --border-strong: rgba(120, 45, 20, 0.22);
+  --border-subtle: rgba(120, 45, 20, 0.06);
+
+  --vermilion: #c22a1f;
+  --vermilion-dark: #941b12;
+  --vermilion-soft: rgba(194, 42, 31, 0.10);
+  --indigo: #431407;
+  --indigo-mid: #7c2d12;
+  --indigo-soft: rgba(124, 45, 18, 0.08);
+  --matcha: #15803d;
+  --matcha-soft: rgba(21, 128, 61, 0.10);
+  --gold: #d97706;
+  --gold-soft: rgba(217, 119, 6, 0.13);
+  --shinkansen: #9333ea;
+  --shinkansen-soft: rgba(147, 51, 234, 0.09);
+  --sky: #b45309;
+  --sky-soft: rgba(180, 83, 9, 0.10);
+}
+
+body.theme-matcha {
+  /* Uji Ceremonial Matcha & Arashiyama Bamboo Zen */
+  --bg: #eff6f1;
+  --bg-elevated: #f7fbf8;
+  --bg-surface: #ffffff;
+  --bg-subtle: #dfece3;
+  --bg-muted: #cce0d2;
+  --bg-glass: rgba(239, 246, 241, 0.88);
+  --card-bg: #ffffff;
+  --card-tint: #f4f9f5;
+
+  --text-main: #0d261a;
+  --text-secondary: #264a38;
+  --text-muted: #527563;
+
+  --border: rgba(15, 60, 38, 0.10);
+  --border-strong: rgba(15, 60, 38, 0.20);
+  --border-subtle: rgba(15, 60, 38, 0.06);
+
+  --vermilion: #15803d;
+  --vermilion-dark: #14532d;
+  --vermilion-soft: rgba(21, 128, 61, 0.11);
+  --indigo: #064e3b;
+  --indigo-mid: #047857;
+  --indigo-soft: rgba(6, 78, 59, 0.08);
+  --matcha: #0f766e;
+  --matcha-soft: rgba(15, 118, 110, 0.11);
+  --gold: #a16207;
+  --gold-soft: rgba(161, 98, 7, 0.12);
+  --shinkansen: #4f46e5;
+  --shinkansen-soft: rgba(79, 70, 229, 0.09);
+  --sky: #0284c7;
+  --sky-soft: rgba(2, 132, 199, 0.10);
+}
+
+body.theme-sakura {
+  /* Shibuya Neon & Yozakura Night Lanterns (Dark Mode Variant) */
+  --bg: #110d1d;
+  --bg-elevated: #19132b;
+  --bg-surface: #1b152e;
+  --bg-subtle: #241c3d;
+  --bg-muted: #302552;
+  --bg-glass: rgba(17, 13, 29, 0.88);
+  --card-bg: #1b152e;
+  --card-tint: #211938;
+
+  --text-main: #fdf2f8;
+  --text-secondary: #e2d4f0;
+  --text-muted: #a795bd;
+
+  --border: rgba(244, 114, 182, 0.14);
+  --border-strong: rgba(244, 114, 182, 0.26);
+  --border-subtle: rgba(244, 114, 182, 0.07);
+
+  --vermilion: #f43f5e;
+  --vermilion-dark: #e11d48;
+  --vermilion-soft: rgba(244, 63, 94, 0.16);
+  --indigo: #c084fc;
+  --indigo-mid: #a855f7;
+  --indigo-soft: rgba(192, 132, 252, 0.13);
+  --matcha: #2dd4bf;
+  --matcha-soft: rgba(45, 212, 191, 0.14);
+  --gold: #fbbf24;
+  --gold-soft: rgba(251, 191, 36, 0.15);
+  --shinkansen: #e879f9;
+  --shinkansen-soft: rgba(232, 121, 249, 0.16);
+  --sky: #38bdf8;
+  --sky-soft: rgba(56, 189, 248, 0.14);
 }
 
 *, *::before, *::after {
@@ -3062,5 +3171,42 @@ body.dark-mode .tl-marker {
 .qty-btn:hover {
   background: var(--border-subtle);
 }
+
+/* ==========================================================================
+   V24: 5-THEME SEASONAL ATMOSPHERE BAR
+   ========================================================================== */
+.theme-pill-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0 8px 0;
+}
+
+.theme-pill-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.theme-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+.theme-chip.active {
+  background: var(--vermilion);
+  color: #ffffff;
+  border-color: var(--vermilion);
+  box-shadow: 0 2px 8px rgba(197, 48, 39, 0.28);
+}
+
 
 

@@ -543,16 +543,46 @@ function checkUrlSyncHash() {
   }
 }
 
-function toggleDarkMode() {
-  appState.darkMode = !appState.darkMode;
+const THEME_CATALOG = {
+  washi: { label: '📜 Washi Klasik (Gündüz Kağıt)', isDark: false, cls: '' },
+  momiji: { label: '🍁 Kyoto Kōyō (Sonbahar Akçaağaç)', isDark: false, cls: 'theme-momiji' },
+  matcha: { label: '🍵 Uji Matcha (Zen Bahçesi)', isDark: false, cls: 'theme-matcha' },
+  midnight: { label: '🌙 Tokyo Gece (OLED Koyu)', isDark: true, cls: 'dark-mode' },
+  sakura: { label: '🌸 Shibuya Neon (Gece Feneri)', isDark: true, cls: 'dark-mode theme-sakura' }
+};
+
+function setAppTheme(mode) {
+  const m = THEME_CATALOG[mode] ? mode : 'washi';
+  appState.themeMode = m;
+  appState.darkMode = !!THEME_CATALOG[m].isDark;
   applyTheme();
   saveMasterState();
-  showToast(appState.darkMode ? 'Gece Modu aktif' : 'Gündüz Modu aktif');
+  showToast(`🎨 Tema: ${THEME_CATALOG[m].label}`);
+}
+
+function toggleDarkMode() {
+  const nextDark = !appState.darkMode;
+  appState.darkMode = nextDark;
+  appState.themeMode = nextDark ? 'midnight' : 'washi';
+  applyTheme();
+  saveMasterState();
+  showToast(appState.darkMode ? '🌙 Tokyo Gece Modu aktif' : '📜 Washi Gündüz Modu aktif');
 }
 
 function applyTheme() {
-  if (typeof document === 'undefined') return;
-  document.body.classList.toggle('dark-mode', !!appState.darkMode);
+  if (typeof document === 'undefined' || !document.body) return;
+  const mode = (appState.themeMode && THEME_CATALOG[appState.themeMode])
+    ? appState.themeMode
+    : (appState.darkMode ? 'midnight' : 'washi');
+  const meta = THEME_CATALOG[mode] || THEME_CATALOG.washi;
+  appState.darkMode = !!meta.isDark;
+  document.body.classList.remove('dark-mode', 'theme-momiji', 'theme-matcha', 'theme-sakura');
+  if (meta.cls) {
+    meta.cls.split(' ').filter(Boolean).forEach(c => document.body.classList.add(c));
+  }
+  document.querySelectorAll('.theme-chip').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-theme') === mode);
+  });
   const btn = document.getElementById('theme-toggle-btn');
   if (btn) btn.innerHTML = appState.darkMode ? ico('sun') : ico('moon');
 }
@@ -762,6 +792,84 @@ function parseFirstYenNumber(str) {
 }
 
 const DAY_LOOP_INFOGRAPHICS = {
+  "day-0": {
+    title: "İslamabad → Doha → Tokyo Haneda T3 & Heiwajima Onsen — Varış Döngüsü",
+    subtitle: "21/11 Cumartesi • QR 633 (03:20) + QR 812 (07:25 → 22:55 HND) & Gece Ücretsiz Onsen",
+    badge: "✈️ VARIŞ & ONSEN LOOP",
+    steps: [
+      { num: 1, title: "03:20 ISB → 05:05 DOH (QR 633)", desc: "20 Kas Cuma gecesi 23:45 check-in • 25 kg bagaj • A350-1000", stopId: "day-0-s0" },
+      { num: 2, title: "07:25 DOH → 22:55 Haneda T3 (QR 812)", desc: "2s 20dk Doha aktarması • Fiziki biniş kartını kesinlikle sakla!", stopId: "day-0-s1" },
+      { num: 3, title: "Haneda T3 Gümrük & 00:40/01:40 Servis", desc: "Visit Japan Web QR + T3 1F Otobüs Durağı #7'den ücretsiz servis", stopId: "day-0-s2" },
+      { num: 4, title: "Natural Hot Spring Heiwajima", desc: "QR812 biniş kartıyla ücretsiz kaplıca, dinlenme koltuğu & sabah kahvaltısı", stopId: "day-0-s3" }
+    ],
+    gettingThereTitle: "🚌 GETTING THERE (Haneda T3 → Heiwajima)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Qatar Airways Welcome Shuttle:</strong> T3 1. Kat Grup Otobüs Durağı (<strong>00:40 / 01:40 / 02:40 • ÜCRETSİZ</strong>)<br>
+        • <strong>Alternatif Taksi:</strong> ~15 dk (~¥3.500)
+      </div>
+    `,
+    aroundTitle: "♨️ ONSEN CHECK-IN KURALI",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>QR 812 Fiziki Biniş Kartı (Boarding Pass)</strong> ve pasaport resepsiyona ibraz edilir.<br>
+        • Uçuştan 1 gün önce saat 14:00'e kadar online 'Welcome Course' kaydı tamamlanmış olmalı.
+      </div>
+    `,
+    tip: "⚠️ QR 812 FİZİKİ BİNİŞ KARTINI UÇAKTAN İNERKEN ASLA ÇÖPE ATMAYIN! Heiwajima Onsen ücretsiz girişi bu karta bağlıdır."
+  },
+  "day-1": {
+    title: "Oi Racecourse Bit Pazarı, Harajuku & Shibuya Sky — 1-Day Loop",
+    subtitle: "22/11 Pazar • Sabah Dev Bit Pazarı → Meiji Tapınağı / Ainz & Tulpe → Shibuya Crossing",
+    badge: "🏺 BİT PAZARI & SHIBUYA LOOP",
+    steps: [
+      { num: 1, title: "Takadanobaba Ev Valiz Bırakma", desc: "Heiwajima'dan sabah JR Yamanote ile Takadanobaba üssüne geçiş", stopId: "day-1-s0" },
+      { num: 2, title: "Oi Racecourse Flea Market", desc: "Tokyo'nun en büyük açık hava bit pazarı (Vintage saat, haori, seramik)", stopId: "day-1-s1" },
+      { num: 3, title: "Harajuku, Meiji Jingu & Ainz & Tulpe", desc: "Orman içi tapınak yürüyüşü + sakin 2 katlı Ainz & Tulpe kozmetik keşfi", stopId: "day-1-s2" },
+      { num: 4, title: "Shibuya Crossing & Helal Akşam Yemeği", desc: "Dünyanın en kalabalık kavşağı, Shibuya Sky / Parco ve helal akşam yemeği", stopId: "day-1-s3" }
+    ],
+    gettingThereTitle: "🚝 GETTING THERE (Takadanobaba → Oi Racecourse)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>JR Yamanote + Tokyo Monorail:</strong> Hamamatsucho üzerinden <strong>Oi Keibajo-mae</strong> (~38 dk • ¥500)<br>
+        • Veya JR Omori İstasyonu'ndan 12 dk yürüyüş / otobüs.
+      </div>
+    `,
+    aroundTitle: "💴 PAZARLIK & ALIŞVERİŞ İPUCU",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Bit pazarı <strong>14:30'da toplanmaya başlar</strong>; en geç 10:30–13:00 arası orada olun.<br>
+        • Yanınızda bolca <strong>¥1.000 banknot ve ¥100/500 bozuk para</strong> bulundurun.
+      </div>
+    `,
+    tip: "💡 Aynı tezgahtan 2 parça seçip 'Futatsu de ikura ni narimasu ka?' (İkisi kaça olur?) derseniz %15–25 indirim kolayca yaparlar."
+  },
+  "day-2": {
+    title: "Shinjuku Kamera (Yodobashi), Sekaido Kırtasiye, Nose Shop & 45F — 1-Day Loop",
+    subtitle: "23/11 Pazartesi • Fujifilm X-T30 III Alımı → Sekaido & Nose Shop → Tokyo Gov 45F Madalya",
+    badge: "📷 SHINJUKU ALIŞVERİŞ & MANZARA LOOP",
+    steps: [
+      { num: 1, title: "Shinjuku Gyoen Sonbahar Bahçesi", desc: "Sabah ışığında altın ginkgo ve kızıl akçaağaç gölet yansımaları", stopId: "day-2-s0" },
+      { num: 2, title: "Sekaido Kırtasiye & NOSE SHOP Parfüm", desc: "Sekaido (Kuru Toga/DelGuard) + NEWoMan 2F NOSE SHOP (Dirty Rice & Gacha)", stopId: "day-2-s1" },
+      { num: 3, title: "Yodobashi / Map Camera & Helal Wagyu Ramen", desc: "Fujifilm X-T30 III kit alımı + Shinjuku-tei Helal A5 Wagyu Ramen", stopId: "day-2-s2" },
+      { num: 4, title: "Tokyo Metropolitan Gov 45F & Hatıra Madalyası", desc: "Ücretsiz 202m seyir terası + tarih kazımalı Kinen Medaru otomatı", stopId: "day-2-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Takadanobaba ↔ Shinjuku)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>JR Yamanote Line:</strong> Takadanobaba → Shinjuku sadece <strong>2 durak (4 dk • ¥150)</strong>!<br>
+        • Aldığınız kamera ve kırtasiye paketlerini 4 dakikada eve bırakabilirsiniz.
+      </div>
+    `,
+    aroundTitle: "🏷️ KASA & KUPON TAKTİĞİ",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Yodobashi / Bic Camera:</strong> Pasaportla Tax-Free + Visa/MC %5 turist kuponu<br>
+        • <strong>Sekaido Shinjuku:</strong> Japonya'nın en ucuz 5 katlı kırtasiye merkezi.
+      </div>
+    `,
+    tip: "📷 Fujifilm X-T30 III'ü bugün aldığınızda 25 Kasım Kawaguchiko Fuji günü dahil tüm seyahatin fotoğraflarını kendi kameranızla çekersiniz!"
+  },
   "day-4": {
     title: "Lake Kawaguchiko (Mt. Fuji) — 1-Günlük Tam Döngü (1-Day Loop)",
     subtitle: "25/11 Çarşamba • Alınmış Otobüs (Bus 1305 & 1306) + Göl Çevresi Red Line Rotası",
@@ -875,6 +983,155 @@ const DAY_LOOP_INFOGRAPHICS = {
       </div>
     `,
     tip: "⚠️ HAYATİ SAAT KURALI: Aoniyoshi 15:28'de Nara'ya varır ve Todai-ji 17:00'de (son giriş 16:30) kapanır! İner inmez ÖNCE Todai-ji'ye girin, geyikleri çıkışta besleyin."
+  },
+  "day-6": {
+    title: "Shinkansen Nozomi 379 ile Tokyo → Osaka & Dotonbori Neon — 1-Day Loop",
+    subtitle: "27/11 Cuma • 11:00 Nozomi 379 (Alındı • Vagon 12, 16D/16E) → Daikokucho Ev → Dotonbori",
+    badge: "🚅 SHINKANSEN & OSAKA LOOP",
+    steps: [
+      { num: 1, title: "Takadanobaba → Tokyo İstasyonu", desc: "En geç 10:15'te Tokyo St. Shinkansen peronunda olun • Helal Ekiben kumanya", stopId: "day-6-s0" },
+      { num: 2, title: "11:00 Nozomi 379 → 13:30 Shin-Osaka", desc: "ALINDI (Vagon 12 • Koltuk 16D/16E • Fuji Dağı sağ pencere E tarafında!)", stopId: "day-6-s1" },
+      { num: 3, title: "Daikokucho Ev Check-in & Namba", desc: "Midosuji Metro ile tek hatta Shin-Osaka'dan Daikokucho'ya geçiş", stopId: "day-6-s2" },
+      { num: 4, title: "Dotonbori Glico & Helal Okonomiyaki", desc: "Kanal boyu neon ışıklar, Chibo Diversity / Honolu Namba helal akşam yemeği", stopId: "day-6-s3" }
+    ],
+    gettingThereTitle: "🚅 GETTING THERE (Tokyo → Shin-Osaka → Daikokucho)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Nozomi 379 (ALINDI):</strong> 11:00 Tokyo → 13:30 Shin-Osaka (<strong>2s 30dk</strong> • Büyük Bagaj Koltuğu)<br>
+        • <strong>Osaka Metro Midosuji Line:</strong> Shin-Osaka → Daikokucho (<strong>19 dk • ¥290</strong>)
+      </div>
+    `,
+    aroundTitle: "🗻 SHINKANSEN FUJI KADRAJI",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Tren kalktıktan <strong>~40–45 dakika sonra (11:40–11:45 civarı)</strong> Shin-Fuji'den geçerken <strong>16E koltuğu</strong> tam Fuji Dağı'na bakar!
+      </div>
+    `,
+    tip: "🚅 Shinkansen turnikesinde QR biletinizi veya fiziksel biletinizi okutun; kalkıştan 42 dakika sonra kameranızı 16E penceresinde hazır tutun!"
+  },
+  "day-7": {
+    title: "Osaka Kalesi (Madalya Coin), Kuromon Pazarı & Shinsaibashi — 1-Day Loop",
+    subtitle: "28/11 Cumartesi • Kale & Hatıra Madalyası → Helal Öğle → Doguyasuji Bıçak & Shinsaibashi",
+    badge: "🏯 OSAKA KLASİK LOOP",
+    steps: [
+      { num: 1, title: "Osaka Kalesi & Hatıra Madalyonu", desc: "Ana kule 8F seyir terası, altın ginkgo parkı ve tarih kazımalı Kinen Medaru", stopId: "day-7-s0" },
+      { num: 2, title: "Namba / Nipponbashi Helal Öğle", desc: "Matsuri Halal (Takoyaki/Ramen) veya Honolu Osaka Namba", stopId: "day-7-s1" },
+      { num: 3, title: "Kuromon Pazarı & Doguyasuji Mutfak Sokağı", desc: "Taze ızgara deniz ürünleri, çilek/kavun ve Japon şef bıçağı pasajı", stopId: "day-7-s2" },
+      { num: 4, title: "Shinsaibashi, Parco & Amerikamura", desc: "Onitsuka Tiger, Uniqlo, Vintage giyim ve akşam kanal yürüyüşü", stopId: "day-7-s3" }
+    ],
+    gettingThereTitle: "🚇 GETTING THERE (Daikokucho → Osaka Kalesi)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Osaka Metro:</strong> Daikokucho → Hommachi → Tanimachi 4-chome (<strong>~18 dk • ¥240</strong>)
+      </div>
+    `,
+    aroundTitle: "🏅 MADALYA & BIÇAK İPUCU",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Osaka Kalesi ana kulesi hediyelik katında <strong>Kinen Medaru (Hatıra Madalyası)</strong> otomatı ve tarih kazıma makinesi vardır!
+      </div>
+    `,
+    tip: "🔪 Doguyasuji pasajından bıçak alırsanız pasaportla Tax-Free yaptırın ve paketi açmadan uçak altı valize yerleştirin."
+  },
+  "day-8": {
+    title: "Himeji Beyaz Balıkçıl Kalesi & Kobe Helal Wagyu / Camii — 1-Day Loop",
+    subtitle: "29/11 Pazar • UNESCO Himeji Kalesi & Koko-en → Kobe Camii → Sertifikalı Kobe Wagyu",
+    badge: "🥩 HIMEJI & KOBE WAGYU LOOP",
+    steps: [
+      { num: 1, title: "Osaka → Himeji Kalesi & Koko-en", desc: "Japonya'nın en görkemli orijinal samuray kalesi ve bitişiğindeki 9 sonbahar bahçesi", stopId: "day-8-s0" },
+      { num: 2, title: "Himeji → Kobe Sannomiya & Kobe Camii", desc: "1935 yapımı Japonya'nın ilk tarihi camisi ve Kitano yokuşu", stopId: "day-8-s1" },
+      { num: 3, title: "Helal Sertifikalı Kobe Beef (Teppanyaki)", desc: "Cami çevresinde %100 helal sertifikalı A5 Kobe Wagyu deneyimi", stopId: "day-8-s2" },
+      { num: 4, title: "Kobe Limanı (Meriken Park) → Osaka Dönüş", desc: "Kobe Port Tower akşam ışıkları ve JR Special Rapid ile Osaka'ya dönüş", stopId: "day-8-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Osaka → Himeji → Kobe → Osaka)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>JR Special Rapid (Shin-Kaisoku):</strong> Osaka St. → Himeji (<strong>~62 dk • ¥1.520</strong>)<br>
+        • <strong>Himeji → Kobe Sannomiya:</strong> ~39 dk (¥990) | <strong>Kobe → Osaka:</strong> ~21 dk (¥420)
+      </div>
+    `,
+    aroundTitle: "🧦 HIMEJI KALESİ ÇORAP KURALI",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Himeji Kalesi'nin 6 katlı ahşap iç kısmına ayakkabısız girilir. Kışın ahşap zemin çok soğuk olduğu için <strong>kalın çorap veya ayak altı Kairo</strong> şarttır!
+      </div>
+    `,
+    tip: "🏯 Himeji Kalesi gişesinde 'Himeji Castle + Koko-en Kombine Bileti' (¥1.050) alın; Koko-en bahçesi tek başına sadece +¥50'ye gelir!"
+  },
+  "day-12": {
+    title: "Fushimi Inari, Kiyomizu-dera, Sannenzaka & Gion — 1-Day Loop",
+    subtitle: "03/12 Perşembe • Sabah 10.000 Kızıl Torii → Kiyomizu & Tarihi Yokuşlar → Gion & Gece Işıkları",
+    badge: "⛩️ KYOTO İKONİK KŌYŌ LOOP",
+    steps: [
+      { num: 1, title: "Fushimi Inari Taisha (Sabah Erken)", desc: "Binlerce kızıl Torii kapısı tünelinde kalabalık öncesi sabah yürüyüşü", stopId: "day-12-s0" },
+      { num: 2, title: "Kiyomizu-dera & Sannenzaka / Ninenzaka", desc: "Ahşap terastan kızıl akçaağaç denizi ve tarihi taş merdivenli sokaklar", stopId: "day-12-s1" },
+      { num: 3, title: "Gion Helal Wagyu Ramen / Yakiniku", desc: "GYUMON Kyoto Gion veya Naritaya Gion'da mescitli helal öğle molası", stopId: "day-12-s2" },
+      { num: 4, title: "Yasaka Pagoda, Hanamikoji & Gece Işıklandırması", desc: "Gion geyşa sokakları ve akşam tapınak kōyō ışıklandırması", stopId: "day-12-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Gojo / Kyoto → Fushimi → Gion)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Keihan Main Line:</strong> Kiyomizu-Gojo → Fushimi-Inari (<strong>sadece 7 dk • ¥220</strong>)<br>
+        • <strong>Dönüş:</strong> Fushimi-Inari → Kiyomizu-Gojo / Gion-Shijo tek hat!
+      </div>
+    `,
+    aroundTitle: "📸 FOTOĞRAF & ENERJİ TAKTİĞİ",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Fushimi Inari'de tüm dağı tırmanmak (2 saat) yerine <strong>Yotsutsuji Seyir Noktası'na (35 dk)</strong> kadar çıkıp dönmek bacakları Kiyomizu yokuşları için korur.
+      </div>
+    `,
+    tip: "🍁 Kyoto evimiz Kiyomizu-Gojo'ya çok yakın olduğu için gün ortasında aldığınız hediyelikleri eve bırakıp akşam ışıklandırmasına hafif çıkabilirsiniz."
+  },
+  "day-19": {
+    title: "Shinkansen Nozomi 250 ile Kyoto → Tokyo & Nakano Saat Borsası — 1-Day Loop",
+    subtitle: "10/12 Perşembe • Sabah Son Kyoto Turu → 14:48 Nozomi 250 (Alındı) → Kamata Ev / Nakano",
+    badge: "⌚ TOKYO DÖNÜŞ & SAAT LOOP",
+    steps: [
+      { num: 1, title: "Kyoto Son Sabah & Bagaj Hazırlığı", desc: "Kyoto İstasyonu Isetan / Porta son matcha & hediyelik tamamlama", stopId: "day-19-s0" },
+      { num: 2, title: "14:48 Nozomi 250 → 16:57 Shinagawa / Tokyo", desc: "ALINDI (Vagon 12 • Koltuk 11A/11B • Büyük Bagaj Alanlı Koltuk)", stopId: "day-19-s1" },
+      { num: 3, title: "Kamata Ev Check-in (Haneda Üssü)", desc: "Son 2 gece için Haneda Havalimanı'na yakın Kamata evimize yerleşme", stopId: "day-19-s2" },
+      { num: 4, title: "Nakano Broadway / Shinjuku Akşam Turu", desc: "Jackroad & Kame-Kichi saat borsası veya akşam helal kutlama yemeği", stopId: "day-19-s3" }
+    ],
+    gettingThereTitle: "🚅 GETTING THERE (Kyoto → Shinagawa/Tokyo → Kamata)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Nozomi 250 (ALINDI):</strong> 14:48 Kyoto → 16:57 Tokyo (<strong>Vagon 12, 11A/11B</strong>)<br>
+        • <strong>JR Keihin-Tohoku Line:</strong> Shinagawa / Tokyo → Kamata (~12–20 dk)
+      </div>
+    `,
+    aroundTitle: "🗻 SOL PENCERE (11A) FUJI MANZARASI",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • Kyoto'dan Tokyo'ya dönerken <strong>11A (Sol Pencere)</strong> tam Fuji Dağı tarafındadır (~16:00–16:10 arası gün batımı ışığında Fuji!).
+      </div>
+    `,
+    tip: "🚅 Kamata'ya geçerken Nozomi 250'den Tokyo yerine bir önceki durak olan Shinagawa'da inerseniz JR Keihin-Tohoku hattıyla Kamata'ya 10 dakika daha hızlı varırsınız!"
+  },
+  "day-20": {
+    title: "Ginza (Uniqlo 12 Kat, Muji Flagship, G.Itoya) & Valiz Mühürleme — 1-Day Loop",
+    subtitle: "11/12 Cuma • Ginza Dev Mağazalar → Helal Tendon Itsuki → 4 Valiz Vakum & Tartım",
+    badge: "🛍️ GINZA FİNAL ALIŞVERİŞ LOOP",
+    steps: [
+      { num: 1, title: "G.Itoya Kırtasiye & Muji Ginza Flagship", desc: "12 katlı G.Itoya + 6 katlı dünya merkez Muji mağazası (pijama, kepçe, havlu)", stopId: "day-20-s0" },
+      { num: 2, title: "Ginza Tendon Itsuki / Helal Öğle Yemeği", desc: "Mirinsiz özel soslu çıtır karides & sebze tempura kasesi (mescitli)", stopId: "day-20-s1" },
+      { num: 3, title: "Uniqlo Ginza 12 Kat & Ginza Six / Nose Shop", desc: "Heattech, kaşmir, Onitsuka Tiger ve son kozmetik/parfüm eksikleri", stopId: "day-20-s2" },
+      { num: 4, title: "Kamata Ev: Vakumlama & 2x2 Parça Valiz Dağıtımı", desc: "Thai Airways kişi başı 2 parça valiz kuralına göre bıçak/sıvı/pil ayrımı", stopId: "day-20-s3" }
+    ],
+    gettingThereTitle: "🚆 GETTING THERE (Kamata ↔ Ginza / Yurakucho)",
+    gettingThereHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>JR Keihin-Tohoku Line:</strong> Kamata → Yurakucho (Ginza) <strong>tek trenle ~22 dk (¥230)</strong>!
+      </div>
+    `,
+    aroundTitle: "🧳 SON GECE VALİZ ALTIN KURALI",
+    aroundHtml: `
+      <div style="font-size:0.79rem; line-height:1.45; color:var(--text-secondary);">
+        • <strong>Uçak Altı Valize:</strong> Mühürlü Tax-Free kozmetik/parfüm, bıçak, Kai tırnak makası, makas<br>
+        • <strong>Kabin Bagajına:</strong> Fujifilm kamera, lensler, yedek piller, powerbank!
+      </div>
+    `,
+    tip: "🧳 Thai Airways dönüş uçuşumuzda (TG 683 & TG 349) kişi başı 2 PARÇA (toplam 4 valiz) check-in bagaj hakkımız var! Vakum poşetleriyle kışlıkları sıkıştırın."
   }
 };
 
@@ -1539,6 +1796,54 @@ function autoSaveDayNote(dayId, value) {
 // TAB 2: HALAL DINING, MARKETS, PHRASE BUILDER & HIGHLIGHTED ETIKET RADARI
 // ==========================================================================
 
+let currentHalalSearch = '';
+let currentHalalPrayerOnly = false;
+let currentBrandTempFilter = 'all'; // 'all' | 'hot' | 'cold'
+
+function handleHalalSearch(val) {
+  currentHalalSearch = String(val || '');
+  renderHalal();
+  const el = document.getElementById('halal-search-input');
+  if (el) {
+    el.focus();
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+  }
+}
+
+function toggleHalalPrayerOnly() {
+  currentHalalPrayerOnly = !currentHalalPrayerOnly;
+  renderHalal();
+}
+
+function setBrandTempFilter(mode) {
+  currentBrandTempFilter = mode;
+  renderHalal();
+}
+
+function addBrandProductToWishlist(brand, product, jpName, price, where) {
+  if (!Array.isArray(appState.customWishlist)) appState.customWishlist = [];
+  const fullTitle = `${brand} — ${product} (${jpName})`;
+  const exists = appState.customWishlist.some(w => w.name === fullTitle);
+  if (exists) {
+    showToast('Bu ürün zaten Alınacaklar Listenizde var!');
+    return;
+  }
+  const numPrice = parseFirstYenNumber(price) || 180;
+  appState.customWishlist.unshift({
+    id: 'cw-' + Date.now(),
+    name: fullTitle,
+    category: 'Market & Otomat',
+    store: where || '7-Eleven / Lawson / FamilyMart / Otomat',
+    estJPY: numPrice,
+    note: `Japonca: ${jpName}`,
+    qty: 1,
+    checked: false
+  });
+  saveMasterState();
+  renderShopping();
+  showToast(`"${product}" Alınacaklar Listenize eklendi!`);
+}
+
 function renderHalal() {
   const container = document.getElementById('halal-container');
   if (!container) return;
@@ -1559,8 +1864,23 @@ function renderHalal() {
   if (currentHalalSubtab === 'restaurants') {
     const dir = halalData.halalDirectory || [];
     const cities = ['Tümü', ...new Set(dir.map(r => r.city))];
-    const filteredDir = currentHalalCity === 'Tümü' ? dir : dir.filter(r => r.city === currentHalalCity);
+    let filteredDir = currentHalalCity === 'Tümü' ? dir : dir.filter(r => r.city === currentHalalCity);
+    if (currentHalalPrayerOnly) {
+      filteredDir = filteredDir.filter(r => !!r.prayerRoom);
+    }
+    if (currentHalalSearch && currentHalalSearch.trim()) {
+      const qNorm = normalizeOmniText(currentHalalSearch);
+      const qToks = qNorm.split(' ').filter(Boolean);
+      filteredDir = filteredDir.filter(r => {
+        const hay = normalizeOmniText(`${r.name} ${r.city} ${r.area} ${r.cuisine} ${r.mustTry || ''} ${r.whyGreat || ''}`);
+        return qToks.every(t => hay.includes(t));
+      });
+    }
     bodyHtml = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <input type="search" id="halal-search-input" class="search-input" style="flex:1; min-width:210px; padding:8px 12px;" placeholder="🔍 Helal restoran, semt veya yemek ara (Örn: Wagyu, Ramen, Gion, Asakusa)..." value="${escapeAttr(currentHalalSearch)}" oninput="handleHalalSearch(this.value)">
+        <button class="filter-pill-btn ${currentHalalPrayerOnly ? 'active' : ''}" onclick="toggleHalalPrayerOnly()">🕌 Sadece Mescitli</button>
+      </div>
       <div class="pill-filter-row" style="margin-bottom:12px;">
         ${cities.map(c => `<button class="filter-pill-btn ${c === currentHalalCity ? 'active' : ''}" onclick="filterHalalCity('${escapeAttr(c)}')">${c}</button>`).join('')}
       </div>
@@ -1579,15 +1899,38 @@ function renderHalal() {
               <span class="tabular" style="font-weight:800; color:var(--vermilion);">${r.priceRange}</span>
               <span>🕒 ${r.hours}</span>
             </div>
-            <a href="${buildPlaceUrl(r.mapsQuery || r.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Haritada Aç</span></a>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <a href="${buildPlaceUrl(r.mapsQuery || r.name)}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">${ico('pin')} <span>Haritada Aç</span></a>
+              <button class="action-chip" onclick="openStaffModal('${escapeAttr(r.name + ' (' + r.area + ')')}', '${escapeAttr(r.name)}', '${escapeAttr(r.city + ' ' + r.area + ' — ' + r.cuisine)}')">🚕 <span>Taksiye Göster</span></button>
+            </div>
           </div>
         `).join('')}
       </div>
     `;
   } else if (currentHalalSubtab === 'brands') {
-    const drinks = halalData.vendingDrinks || [];
-    const snacks = halalData.brandSnacks || [];
+    let drinks = halalData.vendingDrinks || [];
+    let snacks = halalData.brandSnacks || [];
+    if (currentBrandTempFilter === 'hot') {
+      drinks = drinks.filter(d => String(d.temp || '').toLowerCase().includes('sıcak'));
+    } else if (currentBrandTempFilter === 'cold') {
+      drinks = drinks.filter(d => String(d.temp || '').toLowerCase().includes('soğuk'));
+    }
+    if (currentHalalSearch && currentHalalSearch.trim()) {
+      const qNorm = normalizeOmniText(currentHalalSearch);
+      const qToks = qNorm.split(' ').filter(Boolean);
+      drinks = drinks.filter(d => qToks.every(t => normalizeOmniText(`${d.brand} ${d.product} ${d.jpName} ${d.whyPick} ${d.temp}`).includes(t)));
+      snacks = snacks.filter(s => qToks.every(t => normalizeOmniText(`${s.brand} ${s.product} ${s.jpName} ${s.where} ${s.halalCheck}`).includes(t)));
+    }
     bodyHtml = `
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+        <input type="search" id="halal-search-input" class="search-input" style="flex:1; min-width:210px; padding:8px 12px;" placeholder="🔍 Otomat içeceği veya konbini atıştırmalığı ara (Örn: Boss, Matcha, Alfort, Onigiri)..." value="${escapeAttr(currentHalalSearch)}" oninput="handleHalalSearch(this.value)">
+        <div style="display:flex; gap:5px;">
+          <button class="filter-pill-btn ${currentBrandTempFilter === 'all' ? 'active' : ''}" onclick="setBrandTempFilter('all')">Tümü</button>
+          <button class="filter-pill-btn ${currentBrandTempFilter === 'hot' ? 'active' : ''}" onclick="setBrandTempFilter('hot')">🔥 Sıcak Otomat</button>
+          <button class="filter-pill-btn ${currentBrandTempFilter === 'cold' ? 'active' : ''}" onclick="setBrandTempFilter('cold')">❄️ Soğuk Otomat</button>
+        </div>
+      </div>
+
       <div class="editorial-card" style="border-left:4px solid var(--sky); margin-bottom:14px;">
         <span class="section-eyebrow" style="color:var(--sky);">Otomat (自動販売機) İçecek Rehberi</span>
         <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:4px;">Otomatlardan Alınabilecek Spesifik Markalar (${drinks.length} İçecek)</h3>
@@ -1613,7 +1956,11 @@ function renderHalal() {
                   <div class="jp-pill" style="margin:4px 0;">${d.jpName} • ${d.temp}</div>
                   <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:4px;">${d.whyPick}</p>
                   <div style="font-size:0.74rem; color:var(--matcha); font-weight:700; margin-bottom:6px;">✔ ${d.halalCheck}</div>
-                  <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📷 <span>Gerçek Paket Fotosu</span></a>
+                  <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button class="action-chip map-route" style="min-height:30px; padding:3px 8px; font-size:0.74rem;" onclick="openStaffModal('すみません、この「${escapeAttr(d.jpName)}」はどこにありますか？', 'Sumimasen, kono ${escapeAttr(d.product)} wa doko ni arimasu ka?', 'Affedersiniz, bu içeceği (${escapeAttr(d.product)}) hangi rafta bulabilirim?')">🗣️ <span>Rafta Sor</span></button>
+                    <button class="action-chip" style="min-height:30px; padding:3px 8px; font-size:0.74rem;" onclick="addBrandProductToWishlist('${escapeAttr(d.brand)}', '${escapeAttr(d.product)}', '${escapeAttr(d.jpName)}', '${escapeAttr(d.price)}', 'Sokak Otomatı / Konbini')">➕ <span>Listeme Ekle</span></button>
+                    <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:30px; padding:3px 8px; font-size:0.74rem;">📷 <span>Paket</span></a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1648,7 +1995,11 @@ function renderHalal() {
                   <div style="font-size:0.74rem; color:var(--sky); font-weight:700; margin-bottom:4px;">📍 ${s.where}</div>
                   <div style="font-size:0.77rem; color:var(--matcha); margin-bottom:4px;"><strong>✔ Kontrol:</strong> ${s.halalCheck}</div>
                   ${s.avoidVariant ? `<div style="font-size:0.75rem; color:var(--vermilion); background:rgba(198,40,40,0.06); padding:5px 7px; border-radius:6px; margin-bottom:6px;"><strong>⚠️ Kardeş Aromadan Kaçın:</strong> ${s.avoidVariant}</div>` : ''}
-                  <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place">📷 <span>Gerçek Paket Fotosu</span></a>
+                  <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button class="action-chip map-route" style="min-height:30px; padding:3px 8px; font-size:0.74rem;" onclick="openStaffModal('すみません、この「${escapeAttr(s.jpName)}」はどこにありますか？', 'Sumimasen, kono ${escapeAttr(s.product)} wa doko ni arimasu ka?', 'Affedersiniz, bu ürünü (${escapeAttr(s.product)}) hangi rafta bulabilirim?')">🗣️ <span>Rafta Sor</span></button>
+                    <button class="action-chip" style="min-height:30px; padding:3px 8px; font-size:0.74rem;" onclick="addBrandProductToWishlist('${escapeAttr(s.brand)}', '${escapeAttr(s.product)}', '${escapeAttr(s.jpName)}', '${escapeAttr(s.price)}', '${escapeAttr(s.where)}')">➕ <span>Listeme Ekle</span></button>
+                    <a href="${imgUrl}" target="_blank" rel="noopener noreferrer" class="action-chip map-place" style="min-height:30px; padding:3px 8px; font-size:0.74rem;">📷 <span>Paket</span></a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2895,38 +3246,54 @@ function renderBudget() {
 
         <div class="editorial-card">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-            <h3 style="font-size:0.96rem; font-weight:800;">Hızlı Kur Çevirici (<span class="tabular">1$ = ${fx}¥</span>)</h3>
-            <label style="font-size:0.72rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:5px;">
-              Planlama Kuru (¥):
-              <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${fx}" class="search-input tabular" style="width:74px; min-height:34px; padding:3px 8px;" onchange="updatePlanningFxRate(this.value)">
-            </label>
+            <h3 style="font-size:0.96rem; font-weight:800;">Üçlü Döviz &amp; Tax-Free Çevirici (<span class="tabular">1$ = ${fx}¥ / ₺${getTryPerUsd()}</span>)</h3>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <label style="font-size:0.71rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:4px;">
+                1$ = ¥
+                <input type="number" id="fx-rate-input" min="80" max="250" step="1" value="${fx}" class="search-input tabular" style="width:66px; min-height:32px; padding:3px 6px;" onchange="updatePlanningFxRate(this.value)">
+              </label>
+              <label style="font-size:0.71rem; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:4px;">
+                1$ = ₺
+                <input type="number" id="try-rate-input" min="10" max="150" step="0.5" value="${getTryPerUsd()}" class="search-input tabular" style="width:66px; min-height:32px; padding:3px 6px;" onchange="updateTryPerUsdRate(this.value)">
+              </label>
+            </div>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
             <div>
-              <label style="font-size:0.7rem; font-weight:800; color:var(--text-muted);">JAPON YENİ (¥)</label>
-              <input type="number" id="calc-jpy" class="search-input tabular" style="padding:9px 12px; margin-top:3px;" placeholder="Örn: 177920" oninput="convertFromJPY(this.value)">
+              <label style="font-size:0.69rem; font-weight:800; color:var(--text-muted);">JAPON YENİ (¥)</label>
+              <input type="number" id="calc-jpy" class="search-input tabular" style="padding:9px 10px; margin-top:3px;" placeholder="Örn: 15800" oninput="convertFromJPY(this.value)">
             </div>
             <div>
-              <label style="font-size:0.7rem; font-weight:800; color:var(--text-muted);">USD ($)</label>
-              <input type="number" id="calc-usd" class="search-input tabular" style="padding:9px 12px; margin-top:3px;" placeholder="Örn: 1186" oninput="convertFromUSD(this.value)">
+              <label style="font-size:0.69rem; font-weight:800; color:var(--text-muted);">USD ($)</label>
+              <input type="number" id="calc-usd" class="search-input tabular" style="padding:9px 10px; margin-top:3px;" placeholder="Örn: 105" oninput="convertFromUSD(this.value)">
+            </div>
+            <div>
+              <label style="font-size:0.69rem; font-weight:800; color:var(--text-muted);">TÜRK LİRASI (₺)</label>
+              <input type="number" id="calc-try" class="search-input tabular" style="padding:9px 10px; margin-top:3px;" placeholder="Örn: 3840" oninput="convertFromTRY(this.value)">
             </div>
           </div>
           <div id="calc-taxfree-hint" style="font-size:0.78rem; color:var(--matcha); font-weight:700; margin-top:8px;">
-            Tutar girdiğinizde %10 vergi iadesi sonrası net maliyet burada görünür.
+            Tutar girdiğinizde Dolar, TL ve %10 vergi iadesi sonrası net maliyet burada görünür.
           </div>
         </div>
       </div>
 
       <div>
         <div class="editorial-card">
-          <h3 style="font-size:1rem; font-weight:800; margin-bottom:8px;">Gerçek Harcama &amp; IC Transfer Kaydı</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+            <h3 style="font-size:1rem; font-weight:800;">Gerçek Harcama &amp; IC Transfer Kaydı</h3>
+            <button class="action-chip map-route" style="min-height:30px; padding:3px 9px; font-size:0.74rem;" onclick="copyBudgetReportToWhatsapp()">📤 WhatsApp Özeti Kopyala</button>
+          </div>
           <div class="pill-filter-row" style="margin-bottom:10px;">
-            <button class="filter-pill-btn" onclick="quickAddPreset('Öğle / Akşam Yemeği', 'Yeme - İçme & Günlük Market', 2200)">+¥2.200 Gerçek Yemek</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('Otomat Sıcak/Soğuk İçecek', 'Yeme - İçme & Günlük Market', 160)">+¥160 Otomat</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('7-Eleven / Konbini Sepeti', 'Yeme - İçme & Günlük Market', 800)">+¥800 Market</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('Helal Öğle Yemeği', 'Yeme - İçme & Günlük Market', 2200)">+¥2.200 Öğle</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('Helal Wagyu / Ramen Akşam', 'Yeme - İçme & Günlük Market', 4500)">+¥4.500 Akşam</button>
+            <button class="filter-pill-btn" onclick="quickAddPreset('Tapınak Giriş / Geyik Krakeri', 'Kalan Ulaşım, IC Kart & Giriş Ücretleri', 1000)">+¥1.000 Giriş</button>
             <button class="filter-pill-btn" onclick="recordIcTransfer('hasan', 2000)">+¥2.000 IC Transfer</button>
-            <button class="filter-pill-btn" onclick="quickAddPreset('7-Eleven / Market Sepeti', 'Yeme - İçme & Günlük Market', 800)">+¥800 Market</button>
           </div>
           <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
-            <input type="text" id="exp-title" class="search-input" style="padding:9px 12px;" placeholder="Açıklama (Örn: Yodobashi Fujifilm Kit)">
+            <input type="text" id="exp-title" class="search-input" style="padding:9px 12px;" placeholder="Açıklama (Örn: Sekaido Kırtasiye / Yodobashi Kamera)">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
               <select id="exp-cat" class="search-input" style="padding:9px 10px;">
                 ${budgetData.categories.map(c => `<option value="${c.category}">${c.category}</option>`).join('')}
@@ -3010,30 +3377,94 @@ function updatePlanningFxRate(val) {
   showToast(`Planlama kuru $1 = ¥${appState.fxRate} olarak güncellendi`);
 }
 
+function updateTryPerUsdRate(val) {
+  const num = Number(val);
+  if (!Number.isFinite(num) || num < 10 || num > 150) {
+    showToast('TL kuru 10–150 ₺ aralığında olmalı');
+    return;
+  }
+  appState.tryPerUsd = Math.round(num * 100) / 100;
+  saveMasterState();
+  renderBudget();
+  renderShopping();
+  showToast(`TL kuru $1 = ₺${appState.tryPerUsd} olarak güncellendi`);
+}
+
 function convertFromJPY(val) {
   const jpy = parseFloat(val);
   const usdEl = document.getElementById('calc-usd');
+  const tryEl = document.getElementById('calc-try');
   const hintEl = document.getElementById('calc-taxfree-hint');
-  if (isNaN(jpy)) { if (usdEl) usdEl.value = ''; return; }
-  const fx = getFxRate();
-  const usd = (jpy / fx).toFixed(2);
-  if (usdEl) usdEl.value = usd;
-  const netJpy = Math.round(jpy / 1.1);
-  const refundJpy = jpy - netJpy;
+  if (isNaN(jpy)) {
+    if (usdEl) usdEl.value = '';
+    if (tryEl) tryEl.value = '';
+    return;
+  }
+  const b = computeYenBreakdown(jpy);
+  if (usdEl) usdEl.value = b.usd.toFixed(2);
+  if (tryEl) tryEl.value = Math.round(b.tryVal);
   if (hintEl) {
-    hintEl.innerHTML = `<span class="tabular">¥${jpy.toLocaleString()} = $${usd} USD • Tax-Free iade (~¥${refundJpy.toLocaleString()}) sonrası net: <strong>¥${netJpy.toLocaleString()} ($${(netJpy / fx).toFixed(0)})</strong></span>`;
+    hintEl.innerHTML = buildQuickFxReadoutHtml(b);
   }
 }
 
 function convertFromUSD(val) {
   const usd = parseFloat(val);
   const jpyEl = document.getElementById('calc-jpy');
+  const tryEl = document.getElementById('calc-try');
   const hintEl = document.getElementById('calc-taxfree-hint');
-  if (isNaN(usd)) { if (jpyEl) jpyEl.value = ''; return; }
+  if (isNaN(usd)) {
+    if (jpyEl) jpyEl.value = '';
+    if (tryEl) tryEl.value = '';
+    return;
+  }
   const fx = getFxRate();
   const jpy = Math.round(usd * fx);
   if (jpyEl) jpyEl.value = jpy;
-  if (hintEl) hintEl.innerHTML = `<span class="tabular">$${usd} USD = <strong>¥${jpy.toLocaleString()} JPY</strong> (Kur: 1$ = ${fx}¥)</span>`;
+  const b = computeYenBreakdown(jpy);
+  if (tryEl) tryEl.value = Math.round(b.tryVal);
+  if (hintEl) {
+    hintEl.innerHTML = buildQuickFxReadoutHtml(b);
+  }
+}
+
+function convertFromTRY(val) {
+  const tryAmt = parseFloat(val);
+  const jpyEl = document.getElementById('calc-jpy');
+  const usdEl = document.getElementById('calc-usd');
+  const hintEl = document.getElementById('calc-taxfree-hint');
+  if (isNaN(tryAmt)) {
+    if (jpyEl) jpyEl.value = '';
+    if (usdEl) usdEl.value = '';
+    return;
+  }
+  const usd = tryAmt / getTryPerUsd();
+  const jpy = Math.round(usd * getFxRate());
+  if (usdEl) usdEl.value = usd.toFixed(2);
+  if (jpyEl) jpyEl.value = jpy;
+  const b = computeYenBreakdown(jpy);
+  if (hintEl) {
+    hintEl.innerHTML = buildQuickFxReadoutHtml(b);
+  }
+}
+
+function copyBudgetReportToWhatsapp() {
+  const fx = getFxRate();
+  const tryUsd = getTryPerUsd();
+  const actuals = (appState.expenses || []).filter(e => (e.entryType || 'actual') === 'actual');
+  const totalActualJPY = actuals.reduce((s, e) => s + (Number(e.amountJPY) || 0), 0);
+  const totalActualUSD = (totalActualJPY / fx).toFixed(1);
+  const totalActualTRY = Math.round((totalActualJPY / fx) * tryUsd);
+  const remJPY = (budgetData.totalBudgetJPY || 1350000) - totalActualJPY;
+  const lines = [
+    `🇯🇵 *Japonya 2026 Harcama & Bütçe Özeti*`,
+    `• Gerçekleşen Harcama: ¥${totalActualJPY.toLocaleString()} ($${totalActualUSD} / ~₺${totalActualTRY.toLocaleString()})`,
+    `• Kalan Bütçe: ¥${remJPY.toLocaleString()} (~$${Math.round(remJPY / fx).toLocaleString()})`,
+    `• IC Kartlar: Hasan ¥${(appState.icBalances?.hasan || 0).toLocaleString()} | Eşi ¥${(appState.icBalances?.es || 0).toLocaleString()} | Nakit: ¥${(appState.icBalances?.cashJPY || 0).toLocaleString()}`,
+    `• Son 5 Harcama:`,
+    ...actuals.slice(0, 5).map(e => `  - ${e.title}: ¥${Number(e.amountJPY).toLocaleString()} (${e.date})`)
+  ];
+  copyTextQuick(lines.join('\n'), 'Harcama özeti WhatsApp için kopyalandı!');
 }
 
 function addExpense() {
@@ -3070,8 +3501,20 @@ function deleteExpense(idx) {
 }
 
 // ==========================================================================
-// TAB 5: REHBER (TIPS + CHECKLIST + .ICS & MAP TOOLS)
+// TAB 5: REHBER (TIPS + CHECKLIST + LUGGAGE SIMULATOR + .ICS & MAP TOOLS)
 // ==========================================================================
+
+let currentTipSearch = '';
+
+function handleTipSearch(val) {
+  currentTipSearch = String(val || '');
+  renderGuide();
+  const el = document.getElementById('tips-search-input');
+  if (el) {
+    el.focus();
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+  }
+}
 
 function renderGuide() {
   const container = document.getElementById('guide-container');
@@ -3079,21 +3522,30 @@ function renderGuide() {
 
   const headerHtml = `
     <div class="section-header-block">
-      <span class="section-eyebrow">Saha Bilgi Bankası &amp; Araçlar</span>
-      <h2 class="section-title">Rehber, Kontrol &amp; Takvim</h2>
+      <span class="section-eyebrow">Saha Bilgi Bankası, Valiz Planlayıcı &amp; Araçlar</span>
+      <h2 class="section-title">Rehber, Valiz &amp; Takvim</h2>
     </div>
     <div class="subtab-seg">
-      <button class="subtab-seg-btn ${currentGuideSubtab === 'tips' ? 'active' : ''}" onclick="switchGuideSubtab('tips')">Saha Sırları</button>
-      <button class="subtab-seg-btn ${currentGuideSubtab === 'checklist' ? 'active' : ''}" onclick="switchGuideSubtab('checklist')">Kontrol Listesi</button>
-      <button class="subtab-seg-btn ${currentGuideSubtab === 'tools' ? 'active' : ''}" onclick="switchGuideSubtab('tools')">Takvim &amp; Harita Araçları</button>
+      <button class="subtab-seg-btn ${currentGuideSubtab === 'tips' ? 'active' : ''}" onclick="switchGuideSubtab('tips')">💡 Saha Sırları (${proTipsData.length})</button>
+      <button class="subtab-seg-btn ${currentGuideSubtab === 'checklist' ? 'active' : ''}" onclick="switchGuideSubtab('checklist')">✅ Kontrol Listesi</button>
+      <button class="subtab-seg-btn ${currentGuideSubtab === 'luggage' ? 'active' : ''}" onclick="switchGuideSubtab('luggage')">🧳 Valiz &amp; Bagaj Dağıtıcı</button>
+      <button class="subtab-seg-btn ${currentGuideSubtab === 'tools' ? 'active' : ''}" onclick="switchGuideSubtab('tools')">⚙️ Takvim, Tema &amp; Araçlar</button>
     </div>
   `;
 
   if (currentGuideSubtab === 'tips') {
     const categories = ['Tümü', ...new Set(proTipsData.map(t => t.category))];
-    const filtered = currentTipCategory === 'Tümü' ? proTipsData : proTipsData.filter(t => t.category === currentTipCategory);
+    let filtered = currentTipCategory === 'Tümü' ? proTipsData : proTipsData.filter(t => t.category === currentTipCategory);
+    if (currentTipSearch && currentTipSearch.trim()) {
+      const qNorm = normalizeOmniText(currentTipSearch);
+      const qToks = qNorm.split(' ').filter(Boolean);
+      filtered = filtered.filter(t => qToks.every(tok => normalizeOmniText(`${t.title} ${t.desc} ${t.category}`).includes(tok)));
+    }
     container.innerHTML = `
       ${headerHtml}
+      <div style="margin-bottom:10px;">
+        <input type="search" id="tips-search-input" class="search-input" style="width:100%; padding:8px 12px;" placeholder="🔍 Saha sırlarında ara (Örn: PS5, Tripod, Çorap, Kairo, Bit Pazarı, Mirin)..." value="${escapeAttr(currentTipSearch)}" oninput="handleTipSearch(this.value)">
+      </div>
       <div class="pill-filter-row">
         ${categories.map(cat => `<button class="filter-pill-btn ${cat === currentTipCategory ? 'active' : ''}" onclick="filterProTips('${cat}')">${cat}</button>`).join('')}
       </div>
@@ -3101,10 +3553,40 @@ function renderGuide() {
         ${filtered.map(tip => `
           <div class="editorial-card" style="margin-bottom:0;">
             <div style="margin-bottom:6px;"><span class="stop-cat-tag" style="background:var(--vermilion-soft); color:var(--vermilion);">${tip.category}</span></div>
-            <h3 style="font-size:1.02rem; font-weight:800; margin-bottom:5px;">${tip.title}</h3>
+            <h3 style="font-size:1.02rem; font-weight:800; margin-bottom:5px;">${tip.icon ? tip.icon + ' ' : ''}${tip.title}</h3>
             <p style="font-size:0.84rem; color:var(--text-secondary); line-height:1.55;">${tip.desc}</p>
           </div>
         `).join('')}
+      </div>
+    `;
+  } else if (currentGuideSubtab === 'luggage') {
+    container.innerHTML = `
+      ${headerHtml}
+      <div class="editorial-card" style="border-left:4px solid var(--indigo);">
+        <span class="section-eyebrow" style="color:var(--indigo);">Qatar Airways (25 kg) → Thai Airways (Kişi Başı 2 Parça!)</span>
+        <h3 style="font-size:1.08rem; font-weight:800; margin-bottom:6px;">Hangi Eşya Hangi Çantaya Konmalı? (Gümrük &amp; Uçuş Güvenliği)</h3>
+        <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">
+          Gidişte Qatar Airways (QR633/QR812) kişi başı <strong>25 kg</strong>; dönüşte Thai Airways (TG683/TG349) kişi başı <strong>2 PARÇA (toplam 4 valiz!)</strong> hakkı verir. Havalimanında sorun yaşamamak için aşağıdaki ayrımı uygulayın:
+        </p>
+        <div class="grid-2col">
+          <div style="background:var(--card-tint); border:2px solid var(--sky); border-radius:var(--radius-md); padding:13px;">
+            <div style="font-size:0.74rem; font-weight:900; color:var(--sky); text-transform:uppercase; margin-bottom:6px;">🎒 1. KABİN / EL BAGAJI (Uçak İçine Alınması Zorunlular)</div>
+            <ul style="font-size:0.81rem; color:var(--text-main); line-height:1.55; padding-left:16px;">
+              <li><strong>Fujifilm X-T30 III Gövde &amp; Lensler:</strong> Darbe ve hırsızlığa karşı her zaman sırt çantanızda.</li>
+              <li><strong>Yedek Kamera Pilleri &amp; Powerbank:</strong> Lityum piller uçak altı valize konursa X-ray'de valiz açtırılır!</li>
+              <li><strong>Fiziksel Pasaportlar &amp; QR 812 Biniş Kartı:</strong> Heiwajima Onsen ve Haneda Tax-Free Kiosk için.</li>
+              <li><strong>Değerli Saat (Seiko / Grand Seiko):</strong> Kutusunu valize, saati kolunuza veya el çantanıza alın.</li>
+            </ul>
+          </div>
+          <div style="background:var(--card-tint); border:2px solid var(--vermilion); border-radius:var(--radius-md); padding:13px;">
+            <div style="font-size:0.74rem; font-weight:900; color:var(--vermilion); text-transform:uppercase; margin-bottom:6px;">🧳 2. UÇAK ALTI CHECK-IN VALİZİ (Kabinde El Konulanlar!)</div>
+            <ul style="font-size:0.81rem; color:var(--text-main); line-height:1.55; padding-left:16px;">
+              <li><strong>Kesici Aletler:</strong> Nitori / Kappabashi mutfak bıçakları, <strong>Kai tırnak makası</strong>, Kokuyo HAKO-AKE ve katlanır makaslar!</li>
+              <li><strong>Mühürlü Tax-Free Poşetleri (100ml+ Sıvılar):</strong> Ainz &amp; Tulpe kremler, güneş kremleri, şampuanlar, NOSE SHOP / Nile / SHIRO parfümler, Daiso Glue Away.</li>
+              <li><strong>Vakumlu Poşetlerle Sıkıştırılmış Kıyafetler:</strong> 3COINS/Daiso vakum poşetiyle küçültülmüş Uniqlo kışlıklar ve Markey's/Breeze çocuk kıyafetleri.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     `;
   } else if (currentGuideSubtab === 'checklist') {
@@ -3181,6 +3663,19 @@ function renderGuide() {
     container.innerHTML = `
       ${headerHtml}
       <div class="grid-2col">
+        <div class="editorial-card" style="border-left:4px solid var(--vermilion); margin-bottom:0;">
+          <span class="section-eyebrow" style="color:var(--vermilion);">Görsel Atmosfer &amp; Tema Seçimi</span>
+          <h3 style="font-size:1.04rem; font-weight:800; margin-bottom:6px;">5 Özel Japon Mevsim &amp; Gece Teması</h3>
+          <p style="font-size:0.81rem; color:var(--text-secondary); margin-bottom:10px;">
+            Gündüz kağıt dokusu, Kyoto sonbahar akçaağacı, Uji matcha yeşili veya OLED gece modlarından dilediğinizi seçin:
+          </p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            ${Object.entries(THEME_CATALOG).map(([k, meta]) => `
+              <button class="action-chip ${(appState.themeMode || 'washi') === k ? 'map-route' : ''}" onclick="setAppTheme('${k}')">${meta.label}</button>
+            `).join('')}
+          </div>
+        </div>
+
         <div class="editorial-card" style="border-left:4px solid var(--shinkansen); margin-bottom:0;">
           <span class="section-eyebrow" style="color:var(--shinkansen);">Takvim Entegrasyonu</span>
           <h3 style="font-size:1.04rem; font-weight:800; margin-bottom:4px;">Kritik Saatleri Apple Takvim’e (.ics) Aktar</h3>
@@ -3201,7 +3696,6 @@ function renderGuide() {
             <button class="action-chip map-route" onclick="toggleMapProvider()" style="flex:1; justify-content:center;">${ico('pin')} <span>Google / Apple Değiştir</span></button>
             <button class="action-chip map-place" onclick="openTaxiCardForDay(${currentDayIndex})" style="flex:1; justify-content:center;">${ico('taxi')} <span>Bugünkü Taksi Kartı</span></button>
             <button class="action-chip" onclick="if(typeof window!=='undefined'&&window.print)window.print();" style="flex:1; justify-content:center;">PDF / Yazdır</button>
-            <button class="action-chip" onclick="toggleDarkMode()" style="flex:1; justify-content:center;">Tema</button>
             <button class="action-chip" onclick="openSyncModal()" style="flex:1; justify-content:center;">Eşitleme</button>
           </div>
         </div>
