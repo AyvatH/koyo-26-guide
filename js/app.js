@@ -4918,6 +4918,22 @@ function setupEventListeners() {
     };
     window.addEventListener('online', syncNet);
     window.addEventListener('offline', syncNet);
+
+    let scrollTicking = false;
+    window.addEventListener('scroll', () => {
+      if (!scrollTicking) {
+        const rAF = window.requestAnimationFrame || function(cb) { setTimeout(cb, 16); };
+        rAF(() => {
+          const sy = window.scrollY || (document.documentElement && document.documentElement.scrollTop) || 0;
+          const header = document.querySelector('header.app-header');
+          if (header && header.classList) {
+            header.classList.toggle('header-compact', sy > 45);
+          }
+          scrollTicking = false;
+        });
+        scrollTicking = true;
+      }
+    }, { passive: true });
   }
 }
 
